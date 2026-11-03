@@ -94,35 +94,35 @@
 
                 <MudGrid Class="mt-2">
                     <MudItem xs="12" sm="6" md="3">
-                        <MudPaper Class="pa-3" Elevation="1">
+                        <MudPaper Class="pa-3 stat-tile" Elevation="1">
                             <MudText Typo="Typo.caption">Clients</MudText>
                             <MudText Typo="Typo.h4">@summary.TotalClients</MudText>
                         </MudPaper>
                     </MudItem>
 
                     <MudItem xs="12" sm="6" md="3">
-                        <MudPaper Class="pa-3" Elevation="1">
+                        <MudPaper Class="pa-3 stat-tile" Elevation="1">
                             <MudText Typo="Typo.caption">Devices</MudText>
                             <MudText Typo="Typo.h4">@summary.TotalDevices</MudText>
                         </MudPaper>
                     </MudItem>
 
                     <MudItem xs="12" sm="6" md="3">
-                        <MudPaper Class="pa-3" Elevation="1">
+                        <MudPaper Class="pa-3 stat-tile" Elevation="1">
                             <MudText Typo="Typo.caption">Wired</MudText>
                             <MudText Typo="Typo.h4">@summary.TotalWired</MudText>
                         </MudPaper>
                     </MudItem>
 
                     <MudItem xs="12" sm="6" md="3">
-                        <MudPaper Class="pa-3" Elevation="1">
+                        <MudPaper Class="pa-3 stat-tile" Elevation="1">
                             <MudText Typo="Typo.caption">Wireless</MudText>
                             <MudText Typo="Typo.h4">@summary.TotalWifi</MudText>
                         </MudPaper>
                     </MudItem>
 
                     <MudItem xs="12" sm="6" md="3">
-                        <MudPaper Class="pa-3" Elevation="1" Style="cursor:pointer;"
+                        <MudPaper Class="pa-3 stat-tile" Elevation="1" Style="cursor:pointer;"
                                   @onclick="@(() => Nav.NavigateTo("/clients/offline"))">
                             <MudText Typo="Typo.caption">Offline</MudText>
 
@@ -142,7 +142,7 @@
                     </MudItem>
 
                     <MudItem xs="12" sm="6" md="3">
-                        <MudPaper Class="pa-3" Elevation="1" Style="cursor:pointer;"
+                        <MudPaper Class="pa-3 stat-tile" Elevation="1" Style="cursor:pointer;"
                                   @onclick="@(() => Nav.NavigateTo("/alerts/offline"))">
                             <MudText Typo="Typo.caption">Offline alerts</MudText>
                             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
@@ -159,7 +159,7 @@
                     </MudItem>
 
                     <MudItem xs="12" sm="6" md="3">
-                        <MudPaper Class="pa-3" Elevation="1" Style="cursor:pointer;"
+                        <MudPaper Class="pa-3 stat-tile" Elevation="1" Style="cursor:pointer;"
                                   @onclick="@(() => Nav.NavigateTo("/alerts/discovery"))">
                             <MudText Typo="Typo.caption">New client/device alerts</MudText>
                             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
@@ -176,7 +176,7 @@
                     </MudItem>
 
                     <MudItem xs="12" sm="6" md="3">
-                        <MudPaper Class="pa-3" Elevation="1">
+                        <MudPaper Class="pa-3 stat-tile" Elevation="1">
                             <MudText Typo="Typo.caption">Firmware updates</MudText>
                             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
                                 <MudText Typo="Typo.h4">@summary.UnackedFirmwareAlerts</MudText>
@@ -194,7 +194,7 @@
             </MudItem>
 
             <MudItem xs="12" md="6">
-                <MudPaper Class="pa-3" Elevation="1">
+                <MudPaper Class="pa-3 stat-tile" Elevation="1">
                     <MudStack Row="true" AlignItems="AlignItems.Center">
                         <MudText Typo="Typo.h6">Subnet Utilization</MudText>
                         <MudSpacer />
@@ -232,7 +232,7 @@
 
 
 
-        <MudPaper Class="pa-3" Elevation="1">
+        <MudPaper Class="pa-3 stat-tile" Elevation="1">
             <MudStack Row="true" AlignItems="AlignItems.Center">
                     
                 <MudText Typo="Typo.h6">Offline alerts</MudText>
@@ -367,7 +367,7 @@
             }
         </MudPaper>
 
-        <MudPaper Class="pa-3" Elevation="1">
+        <MudPaper Class="pa-3 stat-tile" Elevation="1">
             <MudText Typo="Typo.h6">Firmware updates</MudText>
 
             @if (firmwareAlerts.Count == 0)
@@ -437,7 +437,7 @@
             }
         </MudPaper>
 
-        <MudPaper Class="pa-3" Elevation="1">
+        <MudPaper Class="pa-3 stat-tile" Elevation="1">
             <MudText Typo="Typo.h6">Critical Devices</MudText>
 
             @if (criticalDevices.Count == 0)
@@ -549,7 +549,7 @@
             }
         </MudPaper>
 
-        <MudPaper Class="pa-3" Elevation="1">
+        <MudPaper Class="pa-3 stat-tile" Elevation="1">
             <MudStack Row="true" AlignItems="AlignItems.Center">
                 <MudText Typo="Typo.h6">New clients/devices</MudText>
                 <MudSpacer />
@@ -629,7 +629,7 @@
             }
         </MudPaper>
 
-        <MudPaper Class="pa-3" Elevation="1">
+        <MudPaper Class="pa-3 stat-tile" Elevation="1">
             <MudText Typo="Typo.h6">Subnets Overview</MudText>
 
             <MudTable T="SubnetRow"

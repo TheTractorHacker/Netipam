@@ -469,6 +469,29 @@ else
             </MudItem>
 
             <MudItem xs="12" sm="6" md="4">
+                <MudNumericField T="int"
+                                 Label="Available IPs shown per subnet"
+                                 HelperText="Next free addresses listed on the Subnets page"
+                                 Min="1"
+                                 Max="50"
+                                 Immediate="true"
+                                 @bind-Value="model.SubnetFreeIpDisplayCount"
+                                 @bind-Value:after="SaveAfterEdit" />
+            </MudItem>
+
+            <MudItem xs="12" sm="6" md="4">
+                <MudNumericField T="int"
+                                 Label="Keep updater logs (hours)"
+                                 HelperText="24 = one day, 168 = one week, 720 = 30 days"
+                                 Min="1"
+                                 Max="8760"
+                                 Step="24"
+                                 Immediate="true"
+                                 @bind-Value="model.UpdaterLogRetentionHours"
+                                 @bind-Value:after="SaveAfterEdit" />
+            </MudItem>
+
+            <MudItem xs="12" sm="6" md="4">
                 <MudSwitch T="bool"
                            Color="Color.Primary"
                            Label="Show WAN status on dashboard"

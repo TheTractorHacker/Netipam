@@ -2,33 +2,118 @@ html, body {
     height: 100%;
     margin: 0;
     padding: 0;
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-family: 'Inter', 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
 }
 
-/* Don’t let template layout CSS interfere */
+/* Don't let template layout CSS interfere */
 body {
     display: block;
 }
 
-/* Your compact table font tweak */
-.mud-table-cell {
-    font-size: 0.75rem !important;
+/* ---------- Surfaces ---------- */
+/* Flat cards with a hairline border instead of heavy drop shadows */
+.mud-paper.mud-elevation-1 {
+    box-shadow: none;
+    border: 1px solid var(--mud-palette-lines-default);
 }
 
-.mud-table-header .mud-table-cell {
+.mud-paper[style*="cursor:pointer"] {
+    transition: border-color .15s ease, transform .15s ease;
+}
+
+.mud-paper[style*="cursor:pointer"]:hover {
+    border-color: var(--mud-palette-primary);
+    transform: translateY(-1px);
+}
+
+/* Dashboard stat tiles: equal height so rows line up */
+.stat-tile {
+    height: 100%;
+    min-height: 92px;
+}
+
+/* ---------- App bar & navigation ---------- */
+.mud-appbar {
+    box-shadow: none;
+    border-bottom: 1px solid var(--mud-palette-lines-default);
+}
+
+.mud-drawer {
+    box-shadow: none;
+    border-right: 1px solid var(--mud-palette-lines-default);
+}
+
+.mud-nav-link {
+    border-radius: 6px;
+    margin: 1px 4px;
+    transition: background-color .12s ease;
+}
+
+.mud-nav-link .mud-nav-link-text {
+    white-space: nowrap;
+}
+
+.mud-nav-link.active:not(.mud-nav-link-disabled) {
+    font-weight: 600;
+}
+
+/* Global quick search in the app bar */
+.mud-input-control.quick-search {
+    flex: 0 0 auto;
+    width: 320px !important;
+    max-width: 38vw;
+}
+
+.quick-search .mud-input-outlined-border {
+    border-radius: 18px;
+}
+
+.quick-search .mud-input-slot {
+    font-size: .85rem;
+}
+
+@media (max-width: 700px) {
+    .quick-search {
+        display: none;
+    }
+}
+
+/* ---------- Tables ---------- */
+.mud-table-cell {
     font-size: 0.8rem !important;
 }
 
-/* Dark mode table zebra striping - slightly darker */
-.mud-theme-dark .mud-table-row-striped {
-    background-color: rgb(255,255,255,0.10);
+.mud-table-head .mud-table-cell,
+.mud-table-header .mud-table-cell {
+    font-size: 0.78rem !important;
+    font-weight: 600;
+    letter-spacing: .02em;
 }
 
-.mud-theme-dark tr {
-    outline: 2px solid red !important;
+.mud-table-dense .mud-table-cell {
+    padding: 6px 12px;
 }
-/* Dark mode zebra striping - broad match * test/
-.mud-theme-dark .mud-table-root .mud-table-body .mud-table-row:nth-of-type(even),
-.mud-theme-dark .mud-table-root .mud-table-body .mud-table-row-striped {
-    background-color: rgba(255, 255, 255, 0.08) !important;
+
+.mud-table-hover .mud-table-row:hover {
+    cursor: pointer;
+}
+
+/* Subtle zebra striping in dark mode */
+.mud-theme-dark .mud-table-row-striped {
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
+/* ---------- Page rhythm ---------- */
+.mud-main-content {
+    padding-inline: 16px !important;
+}
+
+.mud-typography-h6 {
+    font-weight: 600;
+}
+
+/* Thin, unobtrusive scrollbars */
+* {
+    scrollbar-width: thin;
 }

@@ -229,6 +229,11 @@ namespace Netipam.Migrations
                         .HasColumnType("TEXT")
                         .HasDefaultValue("Netipam");
 
+                    b.Property<int>("SubnetFreeIpDisplayCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(3);
+
                     b.Property<string>("ThemeName")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -322,6 +327,11 @@ namespace Netipam.Migrations
                     b.Property<string>("UnifiUsername")
                         .HasMaxLength(128)
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("UpdaterLogRetentionHours")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(24);
 
                     b.HasKey("Id");
 

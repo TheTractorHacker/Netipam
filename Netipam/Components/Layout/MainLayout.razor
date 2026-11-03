@@ -9,6 +9,7 @@
 
 @inject AppSettingsService SettingsService
 @inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Nav
 
 <MudThemeProvider Theme="@_currentTheme" IsDarkMode="@_isDarkMode" />
 <MudPopoverProvider />
@@ -28,6 +29,20 @@
         </MudText>
 
         <MudSpacer />
+
+        <AuthorizeView>
+            <Authorized Context="searchAuth">
+                <MudTextField T="string"
+                              @bind-Value="_quickSearch"
+                              Placeholder="Search IP, device, MAC, location..."
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search"
+                              OnKeyDown="OnQuickSearchKeyDown"
+                              Class="quick-search me-2" />
+            </Authorized>
+        </AuthorizeView>
 
         <AuthorizeView>
             <Authorized>
@@ -63,7 +78,7 @@
                Variant="DrawerVariant.Mini"
                Open="@drawerOpen"
                MiniVariantWidth="56px"
-               Width="160px"
+               Width="220px"
                ClipMode="DrawerClipMode.Always">
 
         <NavMenu />
@@ -193,6 +208,14 @@
         _siteTitle = string.IsNullOrWhiteSpace(s.SiteTitle)
             ? "Netipam"
             : s.SiteTitle;
+    }
+
+    private string? _quickSearch;
+
+    private void OnQuickSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter" || string.IsNullOrWhiteSpace(_quickSearch)) return;
+        Nav.NavigateTo($"/search?q={Uri.EscapeDataString(_quickSearch.Trim())}");
     }
 
     private void ToggleDrawer() => drawerOpen = !drawerOpen;

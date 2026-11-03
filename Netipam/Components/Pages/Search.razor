@@ -1,0 +1,221 @@
+@page "/search"
+@rendermode InteractiveServer
+
+@using Microsoft.EntityFrameworkCore
+@using MudBlazor
+@using Netipam.Data
+
+@inject AppDbContext DbContext
+@inject NavigationManager Nav
+
+<MudStack Spacing="2">
+    <MudText Typo="Typo.h6">Search</MudText>
+
+    <MudTextField T="string"
+                  @bind-Value="input"
+                  Placeholder="IP, name, MAC, hostname, location, model, notes..."
+                  Variant="Variant.Outlined"
+                  Margin="Margin.Dense"
+                  Adornment="Adornment.Start"
+                  AdornmentIcon="@Icons.Material.Filled.Search"
+                  Immediate="false"
+                  OnKeyDown="OnKeyDown"
+                  AutoFocus="true" />
+
+    @if (loading)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+    else if (string.IsNullOrWhiteSpace(Query))
+    {
+        <MudText Typo="Typo.body2">Type something above and press Enter.</MudText>
+    }
+    else if (devices.Count == 0 && subnets.Count == 0 && ips.Count == 0 && locations.Count == 0)
+    {
+        <MudText Typo="Typo.body2">No results for “@Query”.</MudText>
+    }
+    else
+    {
+        @if (devices.Count > 0)
+        {
+            <MudPaper Class="pa-2" Elevation="1">
+                <MudText Typo="Typo.subtitle2" Class="mb-1">Devices &amp; clients (@devices.Count@(devicesTruncated ? "+" : ""))</MudText>
+                <MudTable Items="devices" Dense="true" Hover="true" Elevation="0" Breakpoint="Breakpoint.Sm"
+                          OnRowClick="@((TableRowClickEventArgs<DeviceRow> a) => Nav.NavigateTo(a.Item.Url))">
+                    <HeaderContent>
+                        <MudTh>Name</MudTh>
+                        <MudTh>IP</MudTh>
+                        <MudTh>MAC</MudTh>
+                        <MudTh>Type</MudTh>
+                        <MudTh>Location</MudTh>
+                        <MudTh>Subnet</MudTh>
+                        <MudTh>Status</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Name">
+                            <MudText Typo="Typo.body2">@context.Name</MudText>
+                            @if (!string.IsNullOrWhiteSpace(context.Detail))
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@context.Detail</MudText>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="IP">@context.Ip</MudTd>
+                        <MudTd DataLabel="MAC">@context.Mac</MudTd>
+                        <MudTd DataLabel="Type">@context.Type</MudTd>
+                        <MudTd DataLabel="Location">@context.Location</MudTd>
+                        <MudTd DataLabel="Subnet">@context.Subnet</MudTd>
+                        <MudTd DataLabel="Status">
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                                     Color="@(context.Online ? Color.Success : Color.Default)">
+                                @(context.Online ? "Online" : "Offline")
+                            </MudChip>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudPaper>
+        }
+
+        @if (subnets.Count > 0)
+        {
+            <MudPaper Class="pa-2" Elevation="1">
+                <MudText Typo="Typo.subtitle2" Class="mb-1">Subnets (@subnets.Count)</MudText>
+                <MudTable Items="subnets" Dense="true" Hover="true" Elevation="0"
+                          OnRowClick="@((TableRowClickEventArgs<Subnet> a) => Nav.NavigateTo($"/subnets/{a.Item.Id}/ips"))">
+                    <HeaderContent>
+                        <MudTh>Name</MudTh><MudTh>CIDR</MudTh><MudTh>VLAN</MudTh><MudTh>Description</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@context.Name</MudTd>
+                        <MudTd>@context.Cidr</MudTd>
+                        <MudTd>@context.VlanId</MudTd>
+                        <MudTd>@context.Description</MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudPaper>
+        }
+
+        @if (ips.Count > 0)
+        {
+            <MudPaper Class="pa-2" Elevation="1">
+                <MudText Typo="Typo.subtitle2" Class="mb-1">IP reservations (@ips.Count)</MudText>
+                <MudTable Items="ips" Dense="true" Hover="true" Elevation="0"
+                          OnRowClick="@((TableRowClickEventArgs<IpAssignment> a) => Nav.NavigateTo($"/subnets/{a.Item.SubnetId}/ips"))">
+                    <HeaderContent>
+                        <MudTh>IP</MudTh><MudTh>Status</MudTh><MudTh>Device</MudTh><MudTh>Notes</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@context.IpAddress</MudTd>
+                        <MudTd>@context.Status</MudTd>
+                        <MudTd>@context.Device?.Name</MudTd>
+                        <MudTd>@context.Notes</MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudPaper>
+        }
+
+        @if (locations.Count > 0)
+        {
+            <MudPaper Class="pa-2" Elevation="1">
+                <MudText Typo="Typo.subtitle2" Class="mb-1">Locations (@locations.Count)</MudText>
+                <MudTable Items="locations" Dense="true" Hover="true" Elevation="0"
+                          OnRowClick="@((TableRowClickEventArgs<Location> a) => Nav.NavigateTo($"/locations/{a.Item.Id}/devices"))">
+                    <HeaderContent><MudTh>Name</MudTh></HeaderContent>
+                    <RowTemplate><MudTd>@context.Name</MudTd></RowTemplate>
+                </MudTable>
+            </MudPaper>
+        }
+    }
+</MudStack>
+
+@code {
+    private const int MaxDevices = 200;
+
+    [SupplyParameterFromQuery(Name = "q")]
+    public string? Query { get; set; }
+
+    private string input = "";
+    private bool loading;
+    private bool devicesTruncated;
+
+    private sealed record DeviceRow(int Id, string Name, string? Detail, string? Ip, string? Mac,
+        string? Type, string? Location, string? Subnet, bool Online, string Url);
+
+    private List<DeviceRow> devices = new();
+    private List<Subnet> subnets = new();
+    private List<IpAssignment> ips = new();
+    private List<Location> locations = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        input = Query ?? "";
+        await RunSearchAsync();
+    }
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            Nav.NavigateTo($"/search?q={Uri.EscapeDataString((input ?? "").Trim())}");
+    }
+
+    private async Task RunSearchAsync()
+    {
+        devices = new(); subnets = new(); ips = new(); locations = new();
+        devicesTruncated = false;
+
+        var q = (Query ?? "").Trim().ToLowerInvariant();
+        if (q.Length == 0) return;
+
+        loading = true;
+        try
+        {
+            var found = await DbContext.Devices
+                .AsNoTracking()
+                .Include(d => d.ClientType)
+                .Include(d => d.LocationRef)
+                .Include(d => d.Subnet)
+                .Where(d =>
+                    d.Name.ToLower().Contains(q) ||
+                    (d.Hostname != null && d.Hostname.ToLower().Contains(q)) ||
+                    (d.IpAddress != null && d.IpAddress.Contains(q)) ||
+                    (d.MacAddress != null && d.MacAddress.ToLower().Contains(q)) ||
+                    (d.Manufacturer != null && d.Manufacturer.ToLower().Contains(q)) ||
+                    (d.Model != null && d.Model.ToLower().Contains(q)) ||
+                    (d.OperatingSystem != null && d.OperatingSystem.ToLower().Contains(q)) ||
+                    (d.Description != null && d.Description.ToLower().Contains(q)) ||
+                    (d.Usage != null && d.Usage.ToLower().Contains(q)) ||
+                    (d.AssetNumber != null && d.AssetNumber.ToLower().Contains(q)) ||
+                    (d.Location != null && d.Location.ToLower().Contains(q)) ||
+                    (d.LocationRef != null && d.LocationRef.Name.ToLower().Contains(q)) ||
+                    (d.ClientType != null && d.ClientType.Name.ToLower().Contains(q)) ||
+                    (d.Subnet != null && d.Subnet.Name.ToLower().Contains(q)))
+                .OrderBy(d => d.Name)
+                .Take(MaxDevices + 1)
+                .ToListAsync();
+
+            devicesTruncated = found.Count > MaxDevices;
+            devices = found.Take(MaxDevices).Select(d => new DeviceRow(
+                d.Id, d.Name,
+                string.Join(" · ", new[] { d.Manufacturer, d.Model, d.Hostname }.Where(x => !string.IsNullOrWhiteSpace(x))),
+                d.IpAddress, d.MacAddress, d.ClientType?.Name,
+                d.LocationRef?.Name ?? d.Location, d.Subnet?.Name, d.IsOnline,
+                d.ClientType is { IsDevice: true } ? "/devices" : "/clients")).ToList();
+
+            subnets = await DbContext.Subnets.AsNoTracking()
+                .Where(s => s.Name.ToLower().Contains(q) || s.Cidr.Contains(q) ||
+                            (s.Description != null && s.Description.ToLower().Contains(q)))
+                .OrderBy(s => s.Name).Take(50).ToListAsync();
+
+            ips = await DbContext.IpAssignments.AsNoTracking().Include(i => i.Device)
+                .Where(i => i.IpAddress.Contains(q) || (i.Notes != null && i.Notes.ToLower().Contains(q)))
+                .OrderBy(i => i.IpAddress).Take(50).ToListAsync();
+
+            locations = await DbContext.Locations.AsNoTracking()
+                .Where(l => l.Name.ToLower().Contains(q))
+                .OrderBy(l => l.Name).Take(50).ToListAsync();
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

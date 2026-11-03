@@ -151,6 +151,8 @@ public sealed class AppSettingsService
             current.ShowLastSeenTooltips = incoming.ShowLastSeenTooltips;
             current.UiAutoRefreshSeconds = incoming.UiAutoRefreshSeconds;
             current.UiShowWanStatus = incoming.UiShowWanStatus;
+            current.SubnetFreeIpDisplayCount = Math.Clamp(incoming.SubnetFreeIpDisplayCount <= 0 ? 3 : incoming.SubnetFreeIpDisplayCount, 1, 50);
+            current.UpdaterLogRetentionHours = Math.Clamp(incoming.UpdaterLogRetentionHours <= 0 ? 24 : incoming.UpdaterLogRetentionHours, 1, 24 * 365);
 
             current.DarkMode = incoming.DarkMode;
             current.ThemeName = incoming.ThemeName;

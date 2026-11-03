@@ -46,6 +46,12 @@ public sealed class AppSetting
     public string ThemeName { get; set; } = "Graphite";
     public bool UiShowWanStatus { get; set; } = true;
 
+    // How many next-available IPs to show per subnet on the Subnets page
+    public int SubnetFreeIpDisplayCount { get; set; } = 3;
+
+    // How long updater run/change logs are kept (hours)
+    public int UpdaterLogRetentionHours { get; set; } = 24;
+
     // Cosmetic "site name" shown on the app bar + title
     public string SiteTitle { get; set; } = "Netipam";
 

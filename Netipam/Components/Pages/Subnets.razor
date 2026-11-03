@@ -10,6 +10,7 @@
 @using System.Security.Claims
 
 @inject AppDbContext DbContext
+@inject AppSettingsService SettingsService
 @inject IDialogService DialogService
 @inject NavigationManager Nav
 @inject AuthenticationStateProvider AuthStateProvider
@@ -168,6 +169,7 @@
     private Dictionary<int, int> offlineCounts = new();
     private Dictionary<int, int> usedIpCounts = new();
     private Dictionary<int, List<string>> nextFreeIps = new();
+    private int freeIpCount = 3;
     private bool _canEdit = true;
 
     protected override async Task OnInitializedAsync()
@@ -202,6 +204,7 @@
         offlineCounts.Clear();
         usedIpCounts.Clear();
         nextFreeIps.Clear();
+        freeIpCount = Math.Max(1, (await SettingsService.LoadAsync()).SubnetFreeIpDisplayCount);
 
         var subnetInfos = new Dictionary<int, IpCidr.CidrInfo>();
         foreach (var s in subnets)
@@ -292,7 +295,7 @@
                 reservedSet = new HashSet<uint>();
 
             var subnet = subnets.FirstOrDefault(s => s.Id == subnetId);
-            nextFreeIps[subnetId] = FindNextFreeIps(info, subnet?.DhcpRangeStart, subnet?.DhcpRangeEnd, usedSet, reservedSet, 3);
+            nextFreeIps[subnetId] = FindNextFreeIps(info, subnet?.DhcpRangeStart, subnet?.DhcpRangeEnd, usedSet, reservedSet, freeIpCount);
         }
 
         clientCounts = devices

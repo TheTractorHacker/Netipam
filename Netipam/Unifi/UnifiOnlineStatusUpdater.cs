@@ -794,7 +794,8 @@ public sealed class UnifiOnlineStatusUpdater : BackgroundService
         var eventCutoff = now.AddDays(-StatusEventRetentionDays);
         var localNow = TimeZoneInfo.ConvertTimeFromUtc(now, TimeZoneInfo.Local);
         var rollupCutoff = DateOnly.FromDateTime(localNow.AddDays(-StatusRollupRetentionDays));
-        var runCutoff = now.AddHours(-24);
+        var retentionHours = Math.Max(1, (await _settingsService.LoadAsync(ct)).UpdaterLogRetentionHours);
+        var runCutoff = now.AddHours(-retentionHours);
 
         var oldEvents = await db.DeviceStatusEvents
             .Where(e => e.ChangedAtUtc < eventCutoff)

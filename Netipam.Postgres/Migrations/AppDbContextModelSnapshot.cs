@@ -242,6 +242,11 @@ namespace Netipam.Postgres.Migrations
                         .HasColumnType("character varying(64)")
                         .HasDefaultValue("Netipam");
 
+                    b.Property<int>("SubnetFreeIpDisplayCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(3);
+
                     b.Property<string>("ThemeName")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -335,6 +340,11 @@ namespace Netipam.Postgres.Migrations
                     b.Property<string>("UnifiUsername")
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
+
+                    b.Property<int>("UpdaterLogRetentionHours")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(24);
 
                     b.HasKey("Id");
 

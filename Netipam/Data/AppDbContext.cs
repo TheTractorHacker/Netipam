@@ -94,6 +94,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             // ---- UI / general ----
             entity.Property(x => x.ShowLastSeenTooltips).HasDefaultValue(true);
             entity.Property(x => x.UiAutoRefreshSeconds).HasDefaultValue(0);
+            entity.Property(x => x.SubnetFreeIpDisplayCount).HasDefaultValue(3);
+            entity.Property(x => x.UpdaterLogRetentionHours).HasDefaultValue(24);
             entity.Property(x => x.DarkMode).HasDefaultValue(true);
             entity.Property(x => x.ThemeName)
                   .HasMaxLength(64)

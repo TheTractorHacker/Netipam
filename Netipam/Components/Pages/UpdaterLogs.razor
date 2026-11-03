@@ -6,6 +6,7 @@
 @using Netipam.Data
 
 @inject AppDbContext DbContext
+@inject Netipam.Services.AppSettingsService SettingsService
 @inject NavigationManager Nav
 
 <MudStack Spacing="2">
@@ -57,7 +58,7 @@
     }
     else if (FilteredRuns.Count == 0)
     {
-        <MudText Typo="Typo.body2">No updater runs in the last 24 hours.</MudText>
+        <MudText Typo="Typo.body2">@($"No updater runs in the last {FormatRetention()}.")</MudText>
     }
     else
     {
@@ -155,11 +156,19 @@
         isRefreshing = false;
     }
 
+    private int retentionHours = 24;
+
+    private string FormatRetention()
+        => retentionHours % 24 == 0
+            ? (retentionHours == 24 ? "24 hours" : $"{retentionHours / 24} days")
+            : $"{retentionHours} hours";
+
     private async Task Reload()
     {
         loading = true;
 
-        var cutoff = DateTime.UtcNow.AddHours(-24);
+        retentionHours = Math.Max(1, (await SettingsService.LoadAsync()).UpdaterLogRetentionHours);
+        var cutoff = DateTime.UtcNow.AddHours(-retentionHours);
         runs = await DbContext.UpdaterRunLogs
             .AsNoTracking()
             .Include(r => r.Changes)
