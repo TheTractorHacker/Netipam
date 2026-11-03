@@ -38,33 +38,60 @@ builder.Services.AddDataProtection()
 builder.Services.AddScoped<ExcelExportService>();
 
 // --------------------
-// EF Core (SQLite) - FIX RELATIVE PATH
+// EF Core - SQLite (default) or PostgreSQL
+// Provider: Netipam:Provider = Sqlite | Postgres. If unset, a connection string
+// containing "Host=" is treated as PostgreSQL, anything else as SQLite.
 // --------------------
 var configured = builder.Configuration.GetConnectionString("Default") ?? "Data Source=Netipam.db";
-string sqliteConnectionString;
+var providerSetting = builder.Configuration["Netipam:Provider"];
+var usePostgres = string.IsNullOrWhiteSpace(providerSetting)
+    ? configured.Contains("Host=", StringComparison.OrdinalIgnoreCase)
+    : string.Equals(providerSetting.Trim(), "Postgres", StringComparison.OrdinalIgnoreCase)
+      || string.Equals(providerSetting.Trim(), "PostgreSQL", StringComparison.OrdinalIgnoreCase);
 
-const string prefix = "Data Source=";
-if (configured.TrimStart().StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+string dbConnectionString;
+if (usePostgres)
 {
-    var dataSource = configured.Substring(configured.IndexOf('=') + 1).Trim().Trim('"');
-    sqliteConnectionString = Path.IsPathRooted(dataSource)
-        ? configured
-        : $"Data Source={Path.Combine(builder.Environment.ContentRootPath, dataSource)}";
+    // Keep DateTime semantics identical to SQLite (stored as-is, no UTC enforcement).
+    AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+    dbConnectionString = configured;
+
+    // Migrations live in a separate assembly that isn't listed in Netipam.deps.json, so load it explicitly.
+    var pgMigrations = Path.Combine(AppContext.BaseDirectory, "Netipam.Postgres.dll");
+    if (File.Exists(pgMigrations))
+        System.Reflection.Assembly.LoadFrom(pgMigrations);
 }
 else
 {
-    sqliteConnectionString = configured;
+    const string prefix = "Data Source=";
+    if (configured.TrimStart().StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+    {
+        var dataSource = configured.Substring(configured.IndexOf('=') + 1).Trim().Trim('"');
+        dbConnectionString = Path.IsPathRooted(dataSource)
+            ? configured
+            : $"Data Source={Path.Combine(builder.Environment.ContentRootPath, dataSource)}";
+    }
+    else
+    {
+        dbConnectionString = configured;
+    }
+}
+
+void ConfigureDb(DbContextOptionsBuilder options)
+{
+    if (usePostgres)
+        options.UseNpgsql(dbConnectionString, o => o.MigrationsAssembly("Netipam.Postgres"));
+    else
+        options.UseSqlite(dbConnectionString);
 }
 
 // Identity needs AddDbContext (scoped DbContext).
 // Your services prefer IDbContextFactory (singleton factory).
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite(sqliteConnectionString),
+builder.Services.AddDbContext<AppDbContext>(ConfigureDb,
     contextLifetime: ServiceLifetime.Scoped,
     optionsLifetime: ServiceLifetime.Singleton);
 
-builder.Services.AddDbContextFactory<AppDbContext>(options =>
-    options.UseSqlite(sqliteConnectionString));
+builder.Services.AddDbContextFactory<AppDbContext>(ConfigureDb);
 
 // --------------------
 // Identity / Auth (Blazor-only UI)
@@ -152,6 +179,14 @@ if (builder.Configuration.GetValue<bool>("Netipam:AutoMigrate"))
         }
     }
     await db.Database.MigrateAsync();
+
+    if (usePostgres)
+    {
+        await SqliteToPostgresImporter.TryImportAsync(
+            app.Services,
+            app.Configuration["Netipam:ImportFromSqlite"],
+            app.Logger);
+    }
 }
 
 await IdentitySeed.EnsureSeededAsync(app.Services, app.Configuration);

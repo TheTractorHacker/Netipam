@@ -225,9 +225,9 @@ public sealed class AppSettingsService
     private static async Task EnsureWanStatusDefaultAsync(AppDbContext db, CancellationToken ct)
     {
         // Legacy migrations created this column with DB default false. Ensure first-run seed row keeps WAN status enabled.
-        await db.Database.ExecuteSqlRawAsync(
-            "UPDATE \"AppSettings\" SET \"UiShowWanStatus\" = 1 WHERE \"Id\" = {0} AND \"UiShowWanStatus\" = 0;",
-            new object[] { SingletonId },
-            ct);
+        // Provider-neutral (a raw "= 0/1" comparison fails on PostgreSQL booleans).
+        await db.AppSettings
+            .Where(x => x.Id == SingletonId && !x.UiShowWanStatus)
+            .ExecuteUpdateAsync(x => x.SetProperty(p => p.UiShowWanStatus, true), ct);
     }
 }

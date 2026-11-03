@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="Netipam/Netipam.csproj" />
+  <Project Path="Netipam.Postgres/Netipam.Postgres.csproj" />
 </Solution>

@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: netipam-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: netipam
+      POSTGRES_USER: netipam
+      POSTGRES_PASSWORD: change-me
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U netipam -d netipam"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  netipam:
+    image: nodeplex/netipam:latest
+    container_name: netipam
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "7088:7088"
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Production"
+      ASPNETCORE_URLS: "http://+:7088"
+      Netipam__Provider: "Postgres"
+      ConnectionStrings__Default: "Host=postgres;Port=5432;Database=netipam;Username=netipam;Password=change-me"
+      Netipam__AutoMigrate: "true"
+      TZ: "America/New_York"
+    volumes:
+      - ./data:/data

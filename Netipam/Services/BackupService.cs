@@ -145,6 +145,27 @@ public sealed class BackupService
         db.UserRoles.AddRange(payload.Data.UserRoles.Select(ur => ur.ToEntity()));
 
         await db.SaveChangesAsync(ct);
+
+        // PostgreSQL: explicit IDs were inserted, so advance each identity sequence past MAX(id).
+        if (db.Database.IsNpgsql())
+        {
+            await db.Database.ExecuteSqlRawAsync(@"
+DO $$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT format('%I.%I', c.table_schema, c.table_name) AS tbl, c.column_name AS col,
+           pg_get_serial_sequence(format('%I.%I', c.table_schema, c.table_name), c.column_name) AS seq
+    FROM information_schema.columns c
+    WHERE c.table_schema = 'public' AND (c.is_identity = 'YES' OR c.column_default LIKE 'nextval%')
+  LOOP
+    IF r.seq IS NOT NULL THEN
+      EXECUTE format('SELECT setval(%L, COALESCE((SELECT MAX(%I) FROM %s), 0) + 1, false)', r.seq, r.col, r.tbl);
+    END IF;
+  END LOOP;
+END $$;", ct);
+        }
+
         await tx.CommitAsync(ct);
 
         return total;
