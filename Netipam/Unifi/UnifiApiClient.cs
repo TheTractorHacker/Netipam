@@ -26,6 +26,11 @@ public sealed class UnifiApiClient
 
     private DateTime _cooldownUntilUtc = DateTime.MinValue;
 
+    // false = UniFi OS (UDM/UCG/Cloud Key Gen2+: /api/auth/login, /proxy/network/...)
+    // true  = self-hosted Network Application (port 8443: /api/login, no prefix). Auto-detected at login.
+    private bool _legacyController;
+    private string ApiPrefix => _legacyController ? "" : "/proxy/network";
+
     private static readonly TimeSpan LoginTtl = TimeSpan.FromMinutes(15);
     private static readonly TimeSpan ForbiddenCooldown = TimeSpan.FromSeconds(30);
 
@@ -78,6 +83,7 @@ public sealed class UnifiApiClient
             !string.Equals(_lastSite, site, StringComparison.OrdinalIgnoreCase))
         {
             _csrfToken = null;
+            _legacyController = false;
             _lastLoginUtc = DateTime.MinValue;
             _cooldownUntilUtc = DateTime.MinValue;
 
@@ -119,14 +125,7 @@ public sealed class UnifiApiClient
 
             _csrfToken = null;
 
-            var loginUri = new Uri(cfg.BaseUri, "/api/auth/login");
-
-            using var resp = await _http.PostAsJsonAsync(loginUri, new
-            {
-                username = cfg.Username,
-                password = cfg.Password,
-                remember = true
-            }, ct);
+            using var resp = await LoginWithFallbackAsync(cfg, ct);
 
             if (!resp.IsSuccessStatusCode)
             {
@@ -165,21 +164,24 @@ public sealed class UnifiApiClient
     public async Task<JsonDocument> GetActiveClientsAsync(CancellationToken ct = default)
     {
         var cfg = await GetRuntimeAsync(ct);
-        var url = new Uri(cfg.BaseUri, $"/proxy/network/api/s/{cfg.Site}/stat/sta");
+        await LoginAsync(force: false, ct); // detects UniFi OS vs legacy before the path is built
+        var url = new Uri(cfg.BaseUri, $"{ApiPrefix}/api/s/{cfg.Site}/stat/sta");
         return await GetJsonWithRetryAsync(url, ct);
     }
 
     public async Task<JsonDocument> GetKnownClientsAsync(CancellationToken ct = default)
     {
         var cfg = await GetRuntimeAsync(ct);
-        var url = new Uri(cfg.BaseUri, $"/proxy/network/api/s/{cfg.Site}/rest/user");
+        await LoginAsync(force: false, ct); // detects UniFi OS vs legacy before the path is built
+        var url = new Uri(cfg.BaseUri, $"{ApiPrefix}/api/s/{cfg.Site}/rest/user");
         return await GetJsonWithRetryAsync(url, ct);
     }
 
     public async Task<JsonDocument> GetNetworksAsync(CancellationToken ct = default)
     {
         var cfg = await GetRuntimeAsync(ct);
-        var url = new Uri(cfg.BaseUri, $"/proxy/network/api/s/{cfg.Site}/rest/networkconf");
+        await LoginAsync(force: false, ct); // detects UniFi OS vs legacy before the path is built
+        var url = new Uri(cfg.BaseUri, $"{ApiPrefix}/api/s/{cfg.Site}/rest/networkconf");
         return await GetJsonWithRetryAsync(url, ct);
     }
 
@@ -236,7 +238,7 @@ public sealed class UnifiApiClient
 
         req.Headers.TryAddWithoutValidation("Accept", "application/json");
 
-        using var resp = await _http.SendAsync(req, ct);
+        using var resp = await SendFriendlyAsync(() => _http.SendAsync(req, ct), url, ct);
 
         if (!resp.IsSuccessStatusCode)
         {
@@ -258,6 +260,58 @@ public sealed class UnifiApiClient
         return await JsonDocument.ParseAsync(stream, cancellationToken: ct);
     }
 
+    private async Task<HttpResponseMessage> LoginWithFallbackAsync(UnifiRuntime cfg, CancellationToken ct)
+    {
+        var body = new { username = cfg.Username, password = cfg.Password, remember = true };
+
+        var uosUri = new Uri(cfg.BaseUri, "/api/auth/login");
+        var resp = await SendFriendlyAsync(() => _http.PostAsJsonAsync(uosUri, body, ct), uosUri, ct);
+
+        if (resp.IsSuccessStatusCode)
+        {
+            _legacyController = false;
+            return resp;
+        }
+
+        // UniFi OS has no /api/auth/login on a self-hosted Network Application -> try the legacy endpoint.
+        if (resp.StatusCode == HttpStatusCode.NotFound)
+        {
+            var legacyUri = new Uri(cfg.BaseUri, "/api/login");
+            var legacy = await SendFriendlyAsync(() => _http.PostAsJsonAsync(legacyUri, body, ct), legacyUri, ct);
+            if (legacy.IsSuccessStatusCode)
+            {
+                resp.Dispose();
+                _legacyController = true;
+                _logger.LogInformation("UniFi: detected self-hosted Network Application (legacy API paths).");
+                return legacy;
+            }
+            legacy.Dispose();
+        }
+
+        return resp;
+    }
+
+    private static async Task<HttpResponseMessage> SendFriendlyAsync(
+        Func<Task<HttpResponseMessage>> send, Uri url, CancellationToken ct)
+    {
+        try
+        {
+            return await send();
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new HttpRequestException(
+                $"Timed out connecting to {url.Host}:{url.Port}. The address answers, but nothing is accepting connections on that port. " +
+                "Check the controller URL and port (UniFi OS uses 443, a self-hosted Network Application uses 8443) " +
+                "and any firewall rule that blocks this server from the controller.");
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode is null)
+        {
+            throw new HttpRequestException(
+                $"Cannot reach {url.Host}:{url.Port} - {ex.InnerException?.Message ?? ex.Message}", ex);
+        }
+    }
+
     private static async Task<string> SafeReadBodyAsync(HttpResponseMessage resp, CancellationToken ct)
     {
         try
@@ -275,7 +329,8 @@ public sealed class UnifiApiClient
     public async Task<JsonDocument> GetDevicesAsync(CancellationToken ct = default)
     {
         var cfg = await GetRuntimeAsync(ct);
-        var url = new Uri(cfg.BaseUri, $"/proxy/network/api/s/{cfg.Site}/stat/device");
+        await LoginAsync(force: false, ct); // detects UniFi OS vs legacy before the path is built
+        var url = new Uri(cfg.BaseUri, $"{ApiPrefix}/api/s/{cfg.Site}/stat/device");
         return await GetJsonWithRetryAsync(url, ct);
     }
 

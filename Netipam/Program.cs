@@ -140,6 +140,7 @@ builder.Services.AddAuthorization(options =>
 builder.Services.Configure<UnifiOptions>(builder.Configuration.GetSection("Unifi"));
 builder.Services.Configure<ProxmoxOptions>(builder.Configuration.GetSection("Proxmox"));
 builder.Services.AddHttpClient<UnifiApiClient>()
+    .ConfigureHttpClient(c => c.Timeout = TimeSpan.FromSeconds(20))
     .ConfigurePrimaryHttpMessageHandler(() =>
     {
         return new HttpClientHandler

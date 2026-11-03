@@ -95,176 +95,107 @@
             </MudPaper>
         }
 
-        <MudGrid>
-            <MudItem xs="12" md="6">
-                @if (showWanStatus)
+            var attention = summary.OfflineClients + summary.UnackedOfflineAlerts + summary.UnackedDiscoveryAlerts + summary.UnackedFirmwareAlerts;
+            var wanDown = showWanStatus && wanStatuses.Any(w => w.IsUp == false);
+            var heroTone = (summary.OfflineClients > 0 || wanDown) ? "bad" : attention > 0 ? "warn" : "ok";
+            var heroTitle = wanDown ? "Internet connection is down"
+                : summary.OfflineClients > 0 ? $"{summary.OfflineClients} {(summary.OfflineClients == 1 ? "client is" : "clients are")} offline"
+                : attention > 0 ? $"{attention} {(attention == 1 ? "item needs" : "items need")} your review"
+                : "Everything is running smoothly";
+            var heroIcon = heroTone == "ok" ? Icons.Material.Filled.CheckCircle
+                : heroTone == "warn" ? Icons.Material.Filled.Info : Icons.Material.Filled.Error;
+
+        <div class="@("nw-hero nw-hero-" + heroTone)">
+            <div class="nw-hero-main">
+                <MudIcon Icon="@heroIcon" Class="nw-hero-icon" />
+                <div>
+                    <div class="nw-hero-title">@heroTitle</div>
+                    <div class="nw-hero-sub">
+                        @summary.TotalClients clients · @summary.TotalDevices devices · @summary.TotalWired wired · @summary.TotalWifi wireless
+                    </div>
+                </div>
+            </div>
+
+            <div class="nw-pills">
+                <button type="button" class="@("nw-pill" + (summary.OfflineClients > 0 ? " on-bad" : ""))" @onclick="@(() => Nav.NavigateTo("/clients/offline"))">
+                    <b>@summary.OfflineClients</b> offline
+                </button>
+                <button type="button" class="@("nw-pill" + (summary.UnackedOfflineAlerts > 0 ? " on-bad" : ""))" @onclick="@(() => Nav.NavigateTo("/alerts/offline"))">
+                    <b>@summary.UnackedOfflineAlerts</b> offline alerts
+                </button>
+                <button type="button" class="@("nw-pill" + (summary.UnackedDiscoveryAlerts > 0 ? " on-warn" : ""))" @onclick="@(() => Nav.NavigateTo("/alerts/discovery"))">
+                    <b>@summary.UnackedDiscoveryAlerts</b> new devices
+                </button>
+                <button type="button" class="@("nw-pill" + (summary.UnackedFirmwareAlerts > 0 ? " on-warn" : ""))" @onclick="@(() => Nav.NavigateTo("/devices"))">
+                    <b>@summary.UnackedFirmwareAlerts</b> firmware updates
+                </button>
+            </div>
+
+            @if (showWanStatus && wanStatuses.Count > 0)
+            {
+                <div class="nw-wan">
+                    @foreach (var group in wanStatuses.GroupBy(w => w.GatewayName ?? w.GatewayMac ?? "Gateway").OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase))
+                    {
+                        var groupList = group.ToList();
+                        @foreach (var wan in groupList.OrderBy(w => w.InterfaceName, StringComparer.OrdinalIgnoreCase))
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                                     Color="@(wan.IsUp == true ? Color.Success : wan.IsUp == false ? Color.Error : Color.Default)">
+                                @FormatWanLabel(wan, groupList): @FormatWanStatus(wan.IsUp) @FormatWanIp(wan.IpAddress)
+                            </MudChip>
+                        }
+                    }
+                </div>
+            }
+        </div>
+
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-3 mb-1">
+            <MudText Typo="Typo.h6">Your networks</MudText>
+            <MudSpacer />
+            <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="@(() => Nav.NavigateTo("/subnets"))">Manage subnets</MudButton>
+        </MudStack>
+
+        @if (subnetRows.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Style="opacity:.7;">No subnets yet. Add one and it will show up here as a live card.</MudText>
+        }
+        else
+        {
+            <div class="nw-grid">
+                @foreach (var r in subnetRows.OrderBy(x => x.VlanId ?? int.MaxValue).ThenBy(x => x.Name))
                 {
-                    <MudPaper Class="pa-3">
-                        <MudText Typo="Typo.subtitle2">WAN Status</MudText>
-                        @if (wanStatuses.Count == 0)
-                        {
-                            <MudText Typo="Typo.body2" Class="mt-1">No WAN data available yet.</MudText>
-                        }
-                        else
-                        {
-                            @foreach (var group in wanStatuses
-                                         .GroupBy(w => w.GatewayName ?? w.GatewayMac ?? "Gateway")
-                                         .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase))
+                    var pct = r.UsableCount > 0 ? (int)Math.Round(r.UsedIpCount * 100.0 / r.UsableCount) : 0;
+                    var tone = pct >= 90 ? "crit" : pct >= 75 ? "warn" : "ok";
+                    <div class="@("nw-card nw-" + tone)" @onclick="@(() => Nav.NavigateTo($"/subnets/{r.Id}/ips"))">
+                        <div class="nw-card-head">
+                            <div style="min-width:0;">
+                                <div class="nw-name">@r.Name</div>
+                                <div class="nw-cidr">@r.Cidr</div>
+                            </div>
+                            @if (r.VlanId is not null)
                             {
-                                var groupList = group.ToList();
-                                <MudText Typo="Typo.caption" Class="mt-1">@group.Key</MudText>
-                                <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mt-1">
-                                    @foreach (var wan in groupList.OrderBy(w => w.InterfaceName, StringComparer.OrdinalIgnoreCase))
-                                    {
-                                        <MudChip T="string"
-                                                 Variant="Variant.Outlined"
-                                                 Color="@(wan.IsUp == true ? Color.Success : wan.IsUp == false ? Color.Error : Color.Default)">
-                                            @FormatWanLabel(wan, groupList): @FormatWanStatus(wan.IsUp) @FormatWanIp(wan.IpAddress)
-                                        </MudChip>
-                                    }
-                                </MudStack>
+                                <span class="nw-vlan">VLAN @r.VlanId</span>
                             }
-                        }
-                    </MudPaper>
+                        </div>
+
+                        <div class="nw-ring-row">
+                            <div class="nw-ring" style="@($"--p:{pct}")"><span>@pct%</span></div>
+                            <div class="nw-stats">
+                                <div><b>@r.UsedIpCount</b> <span>of @r.UsableCount used</span></div>
+                                <div><b>@r.FreeIpCount</b> <span>free</span></div>
+                                <div><b>@r.ClientCount</b> <span>clients</span> · <b>@r.DeviceCount</b> <span>devices</span></div>
+                                @if (r.OfflineCount > 0)
+                                {
+                                    <div class="nw-off"><b>@r.OfflineCount</b> offline</div>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="nw-bar"><i style="@($"width:{pct}%")"></i></div>
+                    </div>
                 }
-
-                <MudGrid Class="mt-2">
-                    <MudItem xs="12" sm="6" md="3">
-                        <MudPaper Class="pa-3 stat-tile" Elevation="1">
-                            <MudText Typo="Typo.caption">Clients</MudText>
-                            <MudText Typo="Typo.h4">@summary.TotalClients</MudText>
-                        </MudPaper>
-                    </MudItem>
-
-                    <MudItem xs="12" sm="6" md="3">
-                        <MudPaper Class="pa-3 stat-tile" Elevation="1">
-                            <MudText Typo="Typo.caption">Devices</MudText>
-                            <MudText Typo="Typo.h4">@summary.TotalDevices</MudText>
-                        </MudPaper>
-                    </MudItem>
-
-                    <MudItem xs="12" sm="6" md="3">
-                        <MudPaper Class="pa-3 stat-tile" Elevation="1">
-                            <MudText Typo="Typo.caption">Wired</MudText>
-                            <MudText Typo="Typo.h4">@summary.TotalWired</MudText>
-                        </MudPaper>
-                    </MudItem>
-
-                    <MudItem xs="12" sm="6" md="3">
-                        <MudPaper Class="pa-3 stat-tile" Elevation="1">
-                            <MudText Typo="Typo.caption">Wireless</MudText>
-                            <MudText Typo="Typo.h4">@summary.TotalWifi</MudText>
-                        </MudPaper>
-                    </MudItem>
-
-                    <MudItem xs="12" sm="6" md="3">
-                        <MudPaper Class="pa-3 stat-tile" Elevation="1" Style="cursor:pointer;"
-                                  @onclick="@(() => Nav.NavigateTo("/clients/offline"))">
-                            <MudText Typo="Typo.caption">Offline</MudText>
-
-                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
-                                <MudText Typo="Typo.h4">@summary.OfflineClients</MudText>
-
-                                @if (summary.OfflineClients > 0)
-                                {
-                                    <MudChip T="string" Color="Color.Error" Variant="Variant.Filled" Size="Size.Small">
-                                        Offline
-                                    </MudChip>
-                                }
-                            </MudStack>
-
-                            <MudText Typo="Typo.caption">Click for list</MudText>
-                        </MudPaper>
-                    </MudItem>
-
-                    <MudItem xs="12" sm="6" md="3">
-                        <MudPaper Class="pa-3 stat-tile" Elevation="1" Style="cursor:pointer;"
-                                  @onclick="@(() => Nav.NavigateTo("/alerts/offline"))">
-                            <MudText Typo="Typo.caption">Offline alerts</MudText>
-                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
-                                <MudText Typo="Typo.h4">@summary.UnackedOfflineAlerts</MudText>
-                                @if (summary.UnackedOfflineAlerts > 0)
-                                {
-                                    <MudChip T="string" Color="Color.Error" Variant="Variant.Filled" Size="Size.Small">
-                                        Attention
-                                    </MudChip>
-                                }
-                            </MudStack>
-                            <MudText Typo="Typo.caption">Click for full list</MudText>
-                        </MudPaper>
-                    </MudItem>
-
-                    <MudItem xs="12" sm="6" md="3">
-                        <MudPaper Class="pa-3 stat-tile" Elevation="1" Style="cursor:pointer;"
-                                  @onclick="@(() => Nav.NavigateTo("/alerts/discovery"))">
-                            <MudText Typo="Typo.caption">New client/device alerts</MudText>
-                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
-                                <MudText Typo="Typo.h4">@summary.UnackedDiscoveryAlerts</MudText>
-                                @if (summary.UnackedDiscoveryAlerts > 0)
-                                {
-                                    <MudChip T="string" Color="Color.Info" Variant="Variant.Filled" Size="Size.Small">
-                                        New
-                                    </MudChip>
-                                }
-                            </MudStack>
-                            <MudText Typo="Typo.caption">Click for list</MudText>
-                        </MudPaper>
-                    </MudItem>
-
-                    <MudItem xs="12" sm="6" md="3">
-                        <MudPaper Class="pa-3 stat-tile" Elevation="1">
-                            <MudText Typo="Typo.caption">Firmware updates</MudText>
-                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
-                                <MudText Typo="Typo.h4">@summary.UnackedFirmwareAlerts</MudText>
-                                @if (summary.UnackedFirmwareAlerts > 0)
-                                {
-                                    <MudChip T="string" Color="Color.Warning" Variant="Variant.Filled" Size="Size.Small">
-                                        Update
-                                    </MudChip>
-                                }
-                            </MudStack>
-                            <MudText Typo="Typo.caption">UniFi devices</MudText>
-                        </MudPaper>
-                    </MudItem>
-                </MudGrid>
-            </MudItem>
-
-            <MudItem xs="12" md="6">
-                <MudPaper Class="pa-3 stat-tile" Elevation="1">
-                    <MudStack Row="true" AlignItems="AlignItems.Center">
-                        <MudText Typo="Typo.h6">Subnet Utilization</MudText>
-                        <MudSpacer />
-                    <MudStack Row="true" Spacing="1">
-                        <MudSelect T="int" Dense="true" Variant="Variant.Outlined" Style="min-width:90px; font-size:0.8rem;"
-                                   Value="subnetChartTopN"
-                                   ValueChanged="OnSubnetTopNChanged">
-                            @foreach (var n in subnetChartTopNOptions)
-                            {
-                                <MudSelectItem T="int" Value="@n">@($"Show {n}")</MudSelectItem>
-                            }
-                            @*@<MudSelectItem T="int" Value="0">All</MudSelectItem>*@
-                        </MudSelect>
-                    </MudStack>
-                    </MudStack>
-
-                    @if (subnetChartLabels.Length == 0)
-                    {
-                        <MudText Typo="Typo.body2" Class="mt-2">No subnet data to chart yet.</MudText>
-                    }
-                    else
-                    {
-                        <MudChart ChartType="ChartType.Bar"
-                                  XAxisLabels="@subnetChartLabels"
-                                  ChartSeries="@subnetChartSeries"
-                                  ChartOptions="@subnetChartOptions"
-                                  AxisChartOptions="@subnetChartAxisOptions"
-                                  Height="220px"
-                                  Class="mt-2 subnet-utilization-chart"
-                                  Style="width:100%;" />
-                    }
-                </MudPaper>
-            </MudItem>
-        </MudGrid>
+            </div>
+        }
 
 
 
