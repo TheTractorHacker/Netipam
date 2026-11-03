@@ -21,6 +21,21 @@
 
 <MudStack Spacing="2">
     <style>
+        .ipmap { display: grid; grid-template-columns: repeat(auto-fill, 30px); gap: 3px; }
+        .ipcell { width: 30px; height: 24px; border-radius: 4px; font-size: 10px; display: flex; align-items: center;
+                  justify-content: center; cursor: pointer; user-select: none; color: rgba(255,255,255,.85);
+                  border: 1px solid transparent; transition: transform .08s ease; }
+        .ipcell:hover { transform: scale(1.25); z-index: 2; border-color: #fff; }
+        .ipcell.legend { width: 14px; height: 14px; cursor: default; }
+        .ipcell.legend:hover { transform: none; border-color: transparent; }
+        .ipcell-dim { opacity: .18; }
+        .ipcell-static { background: var(--mud-palette-primary); }
+        .ipcell-dhcpused { background: var(--mud-palette-info); }
+        .ipcell-offline { background: transparent; border-color: var(--mud-palette-error); color: var(--mud-palette-error); }
+        .ipcell-reserved { background: var(--mud-palette-warning); color: #000; }
+        .ipcell-dhcp { background: transparent; border: 1px dashed var(--mud-palette-info); color: var(--mud-palette-info); }
+        .ipcell-deprecated { background: var(--mud-palette-error-darken, #b71c1c); }
+        .ipcell-free { background: rgba(128,128,128,.14); color: var(--mud-palette-text-secondary); }
         .subnetips-filter .mud-input-root,
         .subnetips-filter .mud-input-slot {
             min-height: 26px;
@@ -66,6 +81,13 @@
                       Class="subnetips-filter"
                       @bind-Value="search" />
     
+        <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
+            <MudIconButton Icon="@Icons.Material.Filled.ViewList" Title="Table view"
+                           Color="@(showMap ? Color.Default : Color.Primary)" OnClick="@(() => showMap = false)" />
+            <MudIconButton Icon="@Icons.Material.Filled.GridView" Title="Map view"
+                           Color="@(showMap ? Color.Primary : Color.Default)" OnClick="@(() => showMap = true)" />
+        </MudButtonGroup>
+
         <MudMenu Dense="true" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Class="download-menu">
             <ActivatorContent>
                 <MudIconButton Icon="@Icons.Material.Filled.Download"
@@ -108,6 +130,42 @@
             </MudText>
         </MudPaper>
 
+        @if (showMap)
+        {
+            <MudPaper Class="pa-3" Elevation="1">
+                <MudStack Row="true" Spacing="3" Class="mb-2" Style="flex-wrap:wrap;">
+                    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center"><span class="ipcell ipcell-static legend"></span><MudText Typo="Typo.caption">Static</MudText></MudStack>
+                    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center"><span class="ipcell ipcell-dhcpused legend"></span><MudText Typo="Typo.caption">DHCP lease</MudText></MudStack>
+                    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center"><span class="ipcell ipcell-offline legend"></span><MudText Typo="Typo.caption">Assigned, offline</MudText></MudStack>
+                    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center"><span class="ipcell ipcell-reserved legend"></span><MudText Typo="Typo.caption">Reserved</MudText></MudStack>
+                    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center"><span class="ipcell ipcell-dhcp legend"></span><MudText Typo="Typo.caption">DHCP pool</MudText></MudStack>
+                    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center"><span class="ipcell ipcell-deprecated legend"></span><MudText Typo="Typo.caption">Deprecated</MudText></MudStack>
+                    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center"><span class="ipcell ipcell-free legend"></span><MudText Typo="Typo.caption">Free</MudText></MudStack>
+                    <MudSpacer />
+                    <MudText Typo="Typo.caption">@((rows.Count(r => r.IsUsed) * 100.0 / Math.Max(1, rows.Count)).ToString("0.#"))% used</MudText>
+                </MudStack>
+
+                @if (rows.Count > MapMaxCells)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true">
+                        This subnet has @rows.Count.ToString("N0") addresses; the map is limited to @MapMaxCells.ToString("N0"). Use the table view or narrow with search.
+                    </MudAlert>
+                }
+                else
+                {
+                    var visible = new HashSet<string>(FilteredRows.Select(r => r.Ip));
+                    <div class="ipmap">
+                        @foreach (var r in rows)
+                        {
+                            var dim = visible.Contains(r.Ip) ? "" : " ipcell-dim";
+                            <div class="@("ipcell " + MapCellClass(r) + dim)" title="@MapCellTitle(r)" @onclick="@(() => OnMapCellClick(r))">@LastOctet(r.Ip)</div>
+                        }
+                    </div>
+                }
+            </MudPaper>
+        }
+        else
+        {
         <MudTable T="IpRow"
                   Items="@FilteredRows"
                   FixedHeader="true"
@@ -339,6 +397,7 @@
                 <MudText Typo="Typo.body2" Class="pa-4">No IPs match your filters.</MudText>
             </NoRecordsContent>
         </MudTable>
+        }
     }
 </MudStack>
 
@@ -911,6 +970,54 @@ private static List<uint> GetUsableIpUInts(IpCidr.CidrInfo info)
     }
 
     return list;
+}
+
+private bool showMap = true;
+private const int MapMaxCells = 2048;
+
+private static string LastOctet(string ip)
+{
+    var i = ip.LastIndexOf('.');
+    return i >= 0 ? ip[(i + 1)..] : ip;
+}
+
+private string MapCellClass(IpRow r)
+{
+    var st = GetRowStatus(r);
+    return st switch
+    {
+        IpDisplayStatus.AssignedStatic or IpDisplayStatus.AssignedDhcp when IsRowOffline(r) => "ipcell-offline",
+        IpDisplayStatus.AssignedStatic => "ipcell-static",
+        IpDisplayStatus.AssignedDhcp => "ipcell-dhcpused",
+        IpDisplayStatus.Reserved => "ipcell-reserved",
+        IpDisplayStatus.Dhcp => "ipcell-dhcp",
+        IpDisplayStatus.Deprecated => "ipcell-deprecated",
+        _ => "ipcell-free"
+    };
+}
+
+private string MapCellTitle(IpRow r)
+{
+    if (r.IsUsed)
+    {
+        var names = string.Join(", ", r.Devices.Select(d => d.Name));
+        var mac = r.Devices.Select(d => d.MacAddress).FirstOrDefault(m => !string.IsNullOrWhiteSpace(m));
+        return $"{r.Ip} — {names}{(mac is null ? "" : $" ({mac})")}{(IsRowOffline(r) ? " [offline]" : "")}";
+    }
+    var st = GetRowStatus(r);
+    var note = r.Reservation?.Notes;
+    return $"{r.Ip} — {st}{(string.IsNullOrWhiteSpace(note) ? "" : $": {note}")}\nClick to edit reservation";
+}
+
+private async Task OnMapCellClick(IpRow r)
+{
+    if (r.IsUsed)
+    {
+        search = r.Ip;
+        showMap = false;
+        return;
+    }
+    await OpenReservationDialogAsync(r);
 }
 
 private enum IpViewMode { All, Used, Available, Reserved, Deprecated, Dhcp }

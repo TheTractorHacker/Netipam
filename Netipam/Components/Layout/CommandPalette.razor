@@ -1,0 +1,137 @@
+@using Microsoft.EntityFrameworkCore
+@using MudBlazor
+@using Netipam.Data
+
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject NavigationManager Nav
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField T="string"
+                      @ref="box"
+                      @bind-Value="query"
+                      @bind-Value:after="OnQueryChanged"
+                      Immediate="true"
+                      DebounceInterval="120"
+                      Placeholder="Jump to a page, device, subnet or IP…  (Esc to close)"
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      OnKeyDown="OnKeyDown"
+                      AutoFocus="true" />
+
+        <MudList T="Item" Dense="true" Class="mt-2" Style="max-height:50vh; overflow:auto;">
+            @for (var i = 0; i < items.Count; i++)
+            {
+                var idx = i;
+                var it = items[i];
+                <MudListItem T="Item"
+                             Icon="@it.Icon"
+                             Style="@(idx == selected ? "background: var(--mud-palette-action-default-hover);" : "")"
+                             OnClick="@(() => Go(it))">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                        <MudText Typo="Typo.body2">@it.Title</MudText>
+                        @if (!string.IsNullOrWhiteSpace(it.Subtitle))
+                        {
+                            <MudText Typo="Typo.caption" Style="opacity:.65;">@it.Subtitle</MudText>
+                        }
+                        <MudSpacer />
+                        <MudText Typo="Typo.caption" Style="opacity:.5;">@it.Kind</MudText>
+                    </MudStack>
+                </MudListItem>
+            }
+            @if (items.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Class="pa-2" Style="opacity:.7;">No matches.</MudText>
+            }
+        </MudList>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    private sealed record Item(string Title, string? Subtitle, string Kind, string Icon, string Url);
+
+    private static readonly Item[] Pages =
+    {
+        new("Dashboard", null, "Page", Icons.Material.Filled.Dashboard, "/"),
+        new("Access Panel", null, "Page", Icons.Material.Filled.Apps, "/access-panel"),
+        new("Devices", null, "Page", Icons.Material.Filled.Storage, "/devices"),
+        new("Clients", null, "Page", Icons.Material.Filled.People, "/clients"),
+        new("Rack View", null, "Page", Icons.Material.Filled.ViewInAr, "/racks/view"),
+        new("Subnets", null, "Page", Icons.Material.Filled.Lan, "/subnets"),
+        new("Hosts & Guests", null, "Page", Icons.Material.Filled.DeviceHub, "/hosts"),
+        new("Network Topology", null, "Page", Icons.Material.Filled.AccountTree, "/topology"),
+        new("Import", null, "Page", Icons.Material.Filled.CloudDownload, "/unifi-import"),
+        new("Updater Logs", null, "Page", Icons.Material.Filled.History, "/logs"),
+        new("IP History", null, "Page", Icons.Material.Filled.ManageSearch, "/ip-history"),
+        new("Settings", null, "Page", Icons.Material.Filled.Settings, "/settings"),
+        new("Locations", null, "Page", Icons.Material.Filled.Place, "/locations"),
+        new("Racks", null, "Page", Icons.Material.Filled.ViewInAr, "/racks"),
+        new("Client Types", null, "Page", Icons.Material.Filled.Category, "/client-types"),
+    };
+
+    private MudTextField<string>? box;
+    private string query = "";
+    private int selected;
+    private List<Item> items = new();
+
+    protected override void OnInitialized() => items = Pages.Take(8).ToList();
+
+    private async Task OnQueryChanged()
+    {
+        selected = 0;
+        var q = (query ?? "").Trim().ToLowerInvariant();
+        if (q.Length == 0)
+        {
+            items = Pages.Take(8).ToList();
+            return;
+        }
+
+        var result = Pages.Where(p => p.Title.ToLowerInvariant().Contains(q)).ToList();
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var devs = await db.Devices.AsNoTracking()
+            .Where(d => d.Name.ToLower().Contains(q) ||
+                        (d.IpAddress != null && d.IpAddress.Contains(q)) ||
+                        (d.MacAddress != null && d.MacAddress.ToLower().Contains(q)) ||
+                        (d.Hostname != null && d.Hostname.ToLower().Contains(q)))
+            .OrderBy(d => d.Name).Take(8)
+            .Select(d => new { d.Name, d.IpAddress, IsDevice = d.ClientType != null && d.ClientType.IsDevice })
+            .ToListAsync();
+        result.AddRange(devs.Select(d => new Item(d.Name, d.IpAddress, d.IsDevice ? "Device" : "Client",
+            Icons.Material.Filled.Devices, $"/search?q={Uri.EscapeDataString(d.Name)}")));
+
+        var subs = await db.Subnets.AsNoTracking()
+            .Where(s => s.Name.ToLower().Contains(q) || s.Cidr.Contains(q))
+            .OrderBy(s => s.Name).Take(5).ToListAsync();
+        result.AddRange(subs.Select(s => new Item(s.Name, s.Cidr, "Subnet",
+            Icons.Material.Filled.Lan, $"/subnets/{s.Id}/ips")));
+
+        // Always offer a full search as the last option.
+        result.Add(new Item($"Search everything for “{query!.Trim()}”", null, "Search",
+            Icons.Material.Filled.Search, $"/search?q={Uri.EscapeDataString(query.Trim())}"));
+
+        items = result;
+    }
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (items.Count == 0) return;
+        switch (e.Key)
+        {
+            case "ArrowDown": selected = (selected + 1) % items.Count; break;
+            case "ArrowUp": selected = (selected - 1 + items.Count) % items.Count; break;
+            case "Enter": Go(items[Math.Clamp(selected, 0, items.Count - 1)]); break;
+        }
+    }
+
+    private void Go(Item it)
+    {
+        MudDialog.Close();
+        Nav.NavigateTo(it.Url);
+    }
+}

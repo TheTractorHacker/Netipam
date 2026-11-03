@@ -10,6 +10,8 @@
 @inject AppSettingsService SettingsService
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject IDialogService DialogService
 
 <MudThemeProvider Theme="@_currentTheme" IsDarkMode="@_isDarkMode" />
 <MudPopoverProvider />
@@ -34,7 +36,7 @@
             <Authorized Context="searchAuth">
                 <MudTextField T="string"
                               @bind-Value="_quickSearch"
-                              Placeholder="Search IP, device, MAC, location..."
+                              Placeholder="Search…   (Ctrl+K)"
                               Variant="Variant.Outlined"
                               Margin="Margin.Dense"
                               Adornment="Adornment.Start"
@@ -218,6 +220,44 @@
         Nav.NavigateTo($"/search?q={Uri.EscapeDataString(_quickSearch.Trim())}");
     }
 
+    private DotNetObjectReference<MainLayout>? _selfRef;
+    private bool _paletteOpen;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _selfRef = DotNetObjectReference.Create(this);
+        try { await JS.InvokeVoidAsync("netipamCmdk.register", _selfRef); }
+        catch (JSException) { /* palette is optional */ }
+    }
+
+    [JSInvokable]
+    public async Task OpenCommandPalette()
+    {
+        if (_paletteOpen) return;
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (authState.User.Identity?.IsAuthenticated != true) return;
+
+        _paletteOpen = true;
+        try
+        {
+            var dialog = await DialogService.ShowAsync<CommandPalette>(null, new DialogOptions
+            {
+                MaxWidth = MaxWidth.Small,
+                FullWidth = true,
+                Position = DialogPosition.TopCenter,
+                CloseOnEscapeKey = true,
+                NoHeader = true,
+                BackdropClick = true
+            });
+            await dialog.Result;
+        }
+        finally
+        {
+            _paletteOpen = false;
+        }
+    }
+
     private void ToggleDrawer() => drawerOpen = !drawerOpen;
 
     private async Task ToggleDarkMode()
@@ -229,6 +269,7 @@
     public void Dispose()
     {
         SettingsService.SettingsChanged -= OnSettingsChanged;
+        _selfRef?.Dispose();
     }
 
 
