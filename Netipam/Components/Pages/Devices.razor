@@ -18,139 +18,154 @@
 @inject NavigationManager Nav
 @inject UiSessionStateService UiSessionState
 
-<MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Class="mb-3">
-    <MudText Typo="Typo.h6">Devices</MudText>
+<div class="pg-head">
+    <div class="pg-title">
+        <h1>Devices</h1>
+        <span class="pg-count">@FilteredDevices.Count() <span>of @devices.Count</span></span>
+    </div>
 
-    <MudSpacer />
+    <MudTextField T="string"
+                  Placeholder="Search name, IP, MAC, hostname, subnet..."
+                  Adornment="Adornment.Start"
+                  AdornmentIcon="@Icons.Material.Filled.Search"
+                  Immediate="true"
+                  Variant="Variant.Outlined"
+                  Margin="Margin.Dense"
+                  Clearable="true"
+                  Class="pg-search"
+                  @bind-Value="search" />
 
-    <MudCheckBox T="bool" Dense="true" Label="Online" @bind-Value="showOnline" />
-    <MudCheckBox T="bool" Dense="true" Label="Offline" @bind-Value="showOffline" />
-    <MudCheckBox T="bool" Dense="true" Label="Hide ignored" @bind-Value="hideIgnored" />
-    <MudCheckBox T="bool" Dense="true" Label="Hide DHCP" @bind-Value="hideDhcp" />
+    <div class="pg-actions">
+        <div class="seg" role="group" aria-label="Status">
+            <button type="button" class="@(showOnline && showOffline ? "on" : "")" @onclick="() => SetStatus(true, true)">All</button>
+            <button type="button" class="@(showOnline && !showOffline ? "on" : "")" @onclick="() => SetStatus(true, false)">Online</button>
+            <button type="button" class="@(!showOnline && showOffline ? "on" : "")" @onclick="() => SetStatus(false, true)">Offline</button>
+        </div>
+        <div class="seg" role="group" aria-label="View">
+            <button type="button" class="@(cardView ? "on" : "")" title="Cards" @onclick="() => cardView = true"><MudIcon Icon="@Icons.Material.Filled.GridView" Size="Size.Small" /></button>
+            <button type="button" class="@(!cardView ? "on" : "")" title="Table" @onclick="() => cardView = false"><MudIcon Icon="@Icons.Material.Filled.TableRows" Size="Size.Small" /></button>
+        </div>
+        @if (!cardView)
+        {
+            <MudIconButton Icon="@Icons.Material.Filled.ViewColumn" Title="Column Selector" Size="Size.Small" OnClick="OpenColumnPicker" />
+        }
+        <MudMenu Icon="@Icons.Material.Filled.Download" Size="Size.Small" Dense="true" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+            <MudMenuItem Href="/export/devices.xlsx">Export Devices</MudMenuItem>
+            <MudMenuItem Href="/export/all.xlsx">Export All</MudMenuItem>
+        </MudMenu>
+        @if (_canEdit)
+        {
+            <MudMenu Dense="true" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                <ActivatorContent>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Add">Add</MudButton>
+                </ActivatorContent>
+                <ChildContent>
+                    <MudMenuItem OnClick="OpenAddDeviceDialog">Add Device</MudMenuItem>
+                    <MudMenuItem OnClick="OpenAddClientDialog">Add Client</MudMenuItem>
+                </ChildContent>
+            </MudMenu>
+        }
+    </div>
+</div>
 
-    <MudSelect T="int?" Placeholder="Type" Dense="true" Style="min-width: 220px;" Class="page-filter"
-               @bind-Value="selectedTypeId" Clearable="true">
+<div class="pg-filters">
+    <MudSelect T="int?" Label="Type" Dense="true" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" @bind-Value="selectedTypeId">
         <MudSelectItem T="int?" Value="@(UnassignedSentinel)">Unassigned</MudSelectItem>
         @foreach (var t in deviceTypes)
         {
             <MudSelectItem T="int?" Value="@t.Id">@t.Name</MudSelectItem>
         }
     </MudSelect>
-
-    <MudSelect T="int?" Placeholder="Location" Dense="true" Style="min-width: 220px;" Class="page-filter"
-               @bind-Value="selectedLocationId" Clearable="true">
+    <MudSelect T="int?" Label="Location" Dense="true" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" @bind-Value="selectedLocationId">
         <MudSelectItem T="int?" Value="@(UnassignedLocationSentinel)">Unassigned</MudSelectItem>
         @foreach (var l in locations)
         {
             <MudSelectItem T="int?" Value="@l.Id">@l.Name</MudSelectItem>
         }
     </MudSelect>
-
-    <MudSelect T="int?" Placeholder="Subnet" Dense="true" Style="min-width: 220px;" Class="page-filter"
-               @bind-Value="selectedSubnetId" Clearable="true">
+    <MudSelect T="int?" Label="Subnet" Dense="true" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" @bind-Value="selectedSubnetId">
         <MudSelectItem T="int?" Value="@(UnassignedSubnetSentinel)">Unassigned</MudSelectItem>
         @foreach (var s in subnets)
         {
             <MudSelectItem T="int?" Value="@s.Id">@s.Name</MudSelectItem>
         }
     </MudSelect>
+    <MudCheckBox T="bool" Dense="true" Label="Hide ignored" @bind-Value="hideIgnored" />
+    <MudCheckBox T="bool" Dense="true" Label="Hide DHCP" @bind-Value="hideDhcp" />
+</div>
 
-    <MudTextField T="string"
-                  Placeholder="Search (name, IP, subnet, MAC, hostname...)"
-                  Adornment="Adornment.Start"
-                  AdornmentIcon="@Icons.Material.Filled.Search"
-                  Immediate="true"
-                  Class="ms-2 me-2 page-filter"
-                  @bind-Value="search" />
 
-    <MudIconButton Icon="@Icons.Material.Filled.ViewColumn"
-                   Title="Column Selector"
-                   Size="Size.Medium"
-                   Class="toolbar-button download-icon-btn"
-                   OnClick="OpenColumnPicker" />
-
-    @if (_canEdit)
+@if (cardView)
+{
+    var shown = FilteredDevices.Take(cardLimit).ToList();
+    <div class="dv-grid">
+        @foreach (var d in shown)
+        {
+            var tracked = d.IsStatusTracked;
+            var state = !tracked ? "na" : d.IsOnline ? "on" : "off";
+            var upName = d.HostDevice?.Name ?? d.UpstreamDeviceName;
+            var upConn = d.HostDevice is not null ? "Hosted" : d.UpstreamConnection;
+            var upDisplay = BuildUpstreamDisplay(upName, upConn, d.ConnectionDetail);
+            var makeModel = string.Join(" ", new[] { d.Manufacturer, d.Model }.Where(x => !string.IsNullOrWhiteSpace(x)));
+            var place = (d.LocationRef?.Name ?? d.Location);
+            <div class="dv-card dv-@state">
+                <div class="dv-top">
+                    <MudTooltip Text="@GetStatusTooltip(d)"><span class="dv-dot"></span></MudTooltip>
+                    <div class="dv-name">
+                        @if (TryBuildAccessLink(d.AccessLink, out var href))
+                        {
+                            <a href="@href" target="_blank" rel="noopener noreferrer">@d.Name</a>
+                        }
+                        else
+                        {
+                            @d.Name
+                        }
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(d.ConnectionType))
+                    {
+                        <MudTooltip Text="@GetConnTooltip(d)">
+                            <MudIcon Icon="@(IsWifi(d.ConnectionType) ? Icons.Material.Filled.Wifi : Icons.Material.Filled.SettingsEthernet)" Size="Size.Small" Class="dv-conn" />
+                        </MudTooltip>
+                    }
+                </div>
+                <div class="dv-sub">
+                    @if (d.ClientType is not null) { <span class="dv-type">@d.ClientType.Name</span> }
+                    @if (!string.IsNullOrWhiteSpace(makeModel)) { <span>@makeModel</span> }
+                </div>
+                <div class="dv-ip">
+                    @if (TryGetIpDisplay(d, out var ipDisplay, out var ipTip)) { <MudTooltip Text="@ipTip"><span>@ipDisplay</span></MudTooltip> }
+                    else if (!string.IsNullOrWhiteSpace(d.IpAddress)) { <span>@d.IpAddress</span> }
+                    else { <span class="dv-none">no IP</span> }
+                </div>
+                <dl class="dv-meta">
+                    @if (!string.IsNullOrWhiteSpace(d.MacAddress)) { <dt>MAC</dt><dd class="mono">@d.MacAddress</dd> }
+                    @if (d.Subnet is not null) { <dt>Subnet</dt><dd><a href="@($"/subnets/{d.Subnet.Id}/ips")">@d.Subnet.Name</a></dd> }
+                    @if (!string.IsNullOrWhiteSpace(place)) { <dt>Location</dt><dd>@place</dd> }
+                    @if (!string.IsNullOrWhiteSpace(upDisplay) && upDisplay != "-") { <dt>Via</dt><dd>@upDisplay</dd> }
+                </dl>
+                <div class="dv-actions">
+                    @if (_canEdit) { <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Title="Edit" OnClick="@(() => OpenEditDeviceDialog(d))" /> }
+                    <MudIconButton Icon="@Icons.Material.Filled.History" Size="Size.Small" Title="History" OnClick="@(() => Nav.NavigateTo($"/devices/{d.Id}/history"))" />
+                    @if (_canEdit) { <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Title="Delete" OnClick="@(() => ConfirmDeleteDevice(d))" /> }
+                </div>
+            </div>
+        }
+    </div>
+    @if (FilteredDevices.Count() > cardLimit)
     {
-        <MudMenu Dense="true" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Class="add-menu">
-            <ActivatorContent>
-                <MudIconButton Icon="@Icons.Material.Filled.AddBox"
-                               Title="Add"
-                               Size="Size.Medium"
-                               Class="toolbar-button download-icon-btn" />
-            </ActivatorContent>
-            <ChildContent>
-                <MudMenuItem OnClick="OpenAddDeviceDialog">Add Device</MudMenuItem>
-                <MudMenuItem OnClick="OpenAddClientDialog">Add Client</MudMenuItem>
-            </ChildContent>
-        </MudMenu>
+        <div class="dv-more"><MudButton Variant="Variant.Outlined" OnClick="() => cardLimit += 120">Show more (@(FilteredDevices.Count() - cardLimit) left)</MudButton></div>
     }
-
-    <MudMenu Dense="true" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Class="download-menu">
-        <ActivatorContent>
-            <MudIconButton Icon="@Icons.Material.Filled.Download"
-                           Title="Downloads"
-                           Size="Size.Medium"
-                           Class="toolbar-button download-icon-btn" />
-        </ActivatorContent>
-        <ChildContent>
-            <MudMenuItem Href="/export/devices.xlsx">Export Devices</MudMenuItem>
-            <MudMenuItem Href="/export/all.xlsx">Export All</MudMenuItem>
-        </ChildContent>
-    </MudMenu>
-</MudStack>
-
-<style>
-    .mud-table-cell {
-        padding: 3px 6px !important; /* Adjust vertical (3px) and horizontal (6px) padding as needed */
+    @if (!shown.Any())
+    {
+        <div class="dv-empty">No devices match these filters.</div>
     }
-
-    /* Optional: Target the table header cells for consistent spacing */
-    .mud-table-head .mud-table-cell {
-        padding: 3px 6px !important;
-    }
-
-    .toolbar-button {
-        flex: 0 0 auto;
-        white-space: nowrap;
-    }
-
-    .toolbar-button .mud-button-label {
-        white-space: nowrap;
-    }
-
-    .download-icon-btn {
-        height: 26px;
-        width: 26px;
-        padding: 0;
-    }
-
-    .download-menu {
-        display: flex;
-        align-self: flex-end;
-        margin-right: 20px;
-    }
-
-    .add-menu {
-        display: flex;
-        align-self: flex-end;
-    }
-
-    .page-filter .mud-input-root,
-    .page-filter .mud-input-slot {
-        min-height: 26px;
-        height: 26px;
-    }
-    .page-filter .mud-input-slot {
-        display: flex;
-        align-items: center;
-    }
-
-</style>
-
+}
+else
+{
 <MudTable T="Device"
           Items="@FilteredDevices"
           FixedHeader="true"
-          Height="calc(100vh - 130px)"
+          Height="calc(100vh - 215px)"
           Dense="true"
           Hover="true"
           Bordered="true"
@@ -425,6 +440,7 @@
         <MudText Typo="Typo.body2" Class="pa-4">No devices found.</MudText>
     </NoRecordsContent>
 </MudTable>
+}
 
 @code {
     private const int UnassignedSentinel = -1;
@@ -437,6 +453,14 @@
     private List<Location> locations = new();
     private List<Subnet> subnets = new();
     private bool _canEdit = true;
+    private bool cardView = true;
+    private int cardLimit = 120;
+
+    private void SetStatus(bool online, bool offline)
+    {
+        showOnline = online;
+        showOffline = offline;
+    }
 
     private readonly List<ColumnOption> columns = new()
     {
