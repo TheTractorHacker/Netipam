@@ -305,6 +305,13 @@ public sealed class UnifiApiClient
                 "Check the controller URL and port (UniFi OS uses 443, a self-hosted Network Application uses 8443) " +
                 "and any firewall rule that blocks this server from the controller.");
         }
+        catch (HttpRequestException ex) when (ex.StatusCode is null && ex.InnerException is TimeoutException)
+        {
+            throw new HttpRequestException(
+                $"Connection to {url.Host}:{url.Port} timed out after 5 seconds. The host is up but is dropping connections on that port " +
+                "(usually a firewall rule). The UniFi Network app is often on a different address than the gateway - " +
+                "try the console's own IP, and port 443, 8443 or 11443.", ex);
+        }
         catch (HttpRequestException ex) when (ex.StatusCode is null)
         {
             throw new HttpRequestException(

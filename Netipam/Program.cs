@@ -143,12 +143,16 @@ builder.Services.AddHttpClient<UnifiApiClient>()
     .ConfigureHttpClient(c => c.Timeout = TimeSpan.FromSeconds(20))
     .ConfigurePrimaryHttpMessageHandler(() =>
     {
-        return new HttpClientHandler
+        // Short connect timeout so a firewalled or wrong address fails in seconds, not 20.
+        return new SocketsHttpHandler
         {
             CookieContainer = new CookieContainer(),
             UseCookies = true,
-            ServerCertificateCustomValidationCallback =
-                HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+            ConnectTimeout = TimeSpan.FromSeconds(5),
+            SslOptions = new System.Net.Security.SslClientAuthenticationOptions
+            {
+                RemoteCertificateValidationCallback = (_, _, _, _) => true
+            }
         };
     });
 builder.Services.AddHttpClient<ProxmoxApiClient>()
