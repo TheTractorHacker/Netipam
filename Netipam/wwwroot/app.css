@@ -170,3 +170,61 @@ body {
 .nw-off { color: #ef4444; font-weight: 600; }
 .nw-bar { height: 5px; border-radius: 99px; background: rgba(128,128,128,.2); margin-top: 14px; overflow: hidden; }
 .nw-bar i { display: block; height: 100%; background: var(--c); border-radius: 99px; }
+
+/* ---------- Page header / filters (Devices, Clients) ---------- */
+.pg-head { display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:12px; }
+.pg-title { display:flex; align-items:baseline; gap:12px; margin-right:auto; }
+.pg-title h1 { font-size:1.5rem; font-weight:700; margin:0; letter-spacing:-.01em; }
+.pg-count { font-size:1.1rem; font-weight:600; color:var(--mud-palette-primary); }
+.pg-count span { font-size:.85rem; font-weight:400; color:var(--mud-palette-text-secondary); }
+.pg-search { flex:0 1 380px; min-width:220px; }
+.pg-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.pg-filters { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+.pg-filters .mud-input-control { flex:0 1 190px; min-width:150px; margin:0; }
+
+.seg { display:inline-flex; border:1px solid var(--mud-palette-lines-default); border-radius:8px; overflow:hidden; }
+.seg button { border:0; background:transparent; color:var(--mud-palette-text-secondary); padding:5px 12px; font:inherit; font-size:.82rem; cursor:pointer; display:flex; align-items:center; }
+.seg button + button { border-left:1px solid var(--mud-palette-lines-default); }
+.seg button:hover { background:var(--mud-palette-action-default-hover); }
+.seg button.on { background:var(--mud-palette-primary); color:var(--mud-palette-primary-text); }
+
+/* ---------- Device cards ---------- */
+.dv-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(270px, 1fr)); gap:12px; }
+.dv-card { position:relative; display:flex; flex-direction:column; gap:6px; padding:12px 14px 8px; border:1px solid var(--mud-palette-lines-default); border-left:4px solid var(--mud-palette-lines-default); border-radius:10px; background:var(--mud-palette-surface); transition:border-color .15s ease, box-shadow .15s ease; }
+.dv-card:hover { box-shadow:0 2px 10px rgba(0,0,0,.12); }
+.dv-card.dv-on { border-left-color:var(--mud-palette-success); }
+.dv-card.dv-off { border-left-color:var(--mud-palette-error); }
+.dv-top { display:flex; align-items:center; gap:8px; }
+.dv-dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--mud-palette-gray-default); }
+.dv-on .dv-dot { background:var(--mud-palette-success); }
+.dv-off .dv-dot { background:var(--mud-palette-error); }
+.dv-name { font-weight:600; font-size:1rem; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dv-name a { color:inherit; text-decoration:none; }
+.dv-name a:hover { color:var(--mud-palette-primary); text-decoration:underline; }
+.dv-conn { color:var(--mud-palette-text-secondary); }
+.dv-sub { display:flex; gap:8px; flex-wrap:wrap; font-size:.8rem; color:var(--mud-palette-text-secondary); min-height:1.1em; }
+.dv-type { background:var(--mud-palette-action-default-hover); border-radius:999px; padding:0 8px; color:var(--mud-palette-text-primary); }
+.dv-ip { font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:1.05rem; font-weight:600; }
+.dv-none { font-weight:400; font-size:.85rem; color:var(--mud-palette-text-disabled); font-family:inherit; }
+.dv-meta { display:grid; grid-template-columns:auto 1fr; gap:2px 10px; margin:0; font-size:.8rem; }
+.dv-meta dt { color:var(--mud-palette-text-secondary); }
+.dv-meta dd { margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dv-meta a { color:var(--mud-palette-primary); text-decoration:none; }
+.dv-meta .mono { font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.dv-actions { display:flex; justify-content:flex-end; margin-top:auto; opacity:.35; transition:opacity .12s ease; }
+.dv-card:hover .dv-actions, .dv-card:focus-within .dv-actions { opacity:1; }
+.dv-more { text-align:center; margin:16px 0; }
+.dv-empty { padding:48px; text-align:center; color:var(--mud-palette-text-secondary); }
+
+/* Blazor's FocusOnNavigate focuses the first h1; don't draw a box around it */
+h1:focus, h1:focus-visible { outline: none; }
+.pg-filters .mud-select, .pg-filters .mud-input-control { flex:0 0 190px; width:190px; max-width:190px; }
+.pg-filters .mud-input-control.mud-checkbox, .pg-filters label.mud-checkbox { flex:0 0 auto; width:auto; max-width:none; }
+
+/* App-bar search sits on a dark bar in both themes */
+.mud-appbar .quick-search input, .mud-appbar .quick-search .mud-input-adornment-icon { color: #fff !important; }
+.mud-appbar .quick-search input::placeholder { color: rgba(255,255,255,.72) !important; opacity: 1 !important; }
+
+/* Dense table view */
+.mud-table-dense .mud-table-cell { padding: 4px 8px; white-space: nowrap; }
+.mud-table-dense .mud-table-head .mud-table-cell { font-weight: 600; }
