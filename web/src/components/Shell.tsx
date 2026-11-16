@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link, NavLink, useLocation } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { authApi, type Me } from '../auth';
 import { allNav, allOverlays, OPEN_SEARCH_EVENT, type NavEntry } from '../registry';
+import { inApp } from '../pages/search/nav';
 
 const GROUPS: NavEntry['group'][] = ['Overview', 'Inventory', 'Operations', 'System'];
 
@@ -26,6 +27,23 @@ export default function Shell({ me, children }: { me: Me; children: React.ReactN
   const qc = useQueryClient();
   const [navOpen, setNavOpen] = useState(false);
   const loc = useLocation();
+  const navigate = useNavigate();
+  // Keep every plain <a href="/page"> inside the SPA when a React route serves it, so no link in the
+  // whole UI (present or future) drops back to the classic pages. Exports, downloads, new-tab
+  // clicks and external links are left alone.
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = (e.target as Element | null)?.closest?.('a[href]') as HTMLAnchorElement | null;
+      if (!a || a.target === '_blank' || a.hasAttribute('download') || a.origin !== window.location.origin) return;
+      const path = a.pathname;
+      if (path.startsWith('/app/') || path === '/app' || path.startsWith('/api/') || !inApp(path)) return;
+      e.preventDefault();
+      navigate(path + a.search + a.hash);
+    };
+    document.addEventListener('click', onClick);
+    return () => document.removeEventListener('click', onClick);
+  }, [navigate]);
   useEffect(() => setNavOpen(false), [loc.pathname]); // close the mobile menu after navigating
   const replaced = new Set(allNav.map((n) => n.replaces).filter(Boolean).map((p) => norm(p!)));
   const isAdmin = me.roles.includes('Admin');
