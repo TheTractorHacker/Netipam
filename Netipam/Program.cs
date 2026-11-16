@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
 using Netipam.Components;
 using Netipam.Data;
+using Netipam.Api;
 using Netipam.Proxmox;
 using Netipam.Services;
 using Netipam.Unifi;
@@ -116,6 +117,24 @@ builder.Services.ConfigureApplicationCookie(options =>
 {
     options.LoginPath = "/login";
     options.AccessDeniedPath = "/login";
+
+    // API calls get a 401/403 instead of a redirect to the login page.
+    options.Events.OnRedirectToLogin = ctx =>
+    {
+        if (ctx.Request.Path.StartsWithSegments("/api"))
+            ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        else
+            ctx.Response.Redirect(ctx.RedirectUri);
+        return Task.CompletedTask;
+    };
+    options.Events.OnRedirectToAccessDenied = ctx =>
+    {
+        if (ctx.Request.Path.StartsWithSegments("/api"))
+            ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
+        else
+            ctx.Response.Redirect(ctx.RedirectUri);
+        return Task.CompletedTask;
+    };
 });
 
 // Blazor auth state integration
@@ -202,7 +221,10 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
+// Branded not-found page for the Blazor UI only; /api keeps plain status codes for API clients.
+app.UseWhen(
+    ctx => !ctx.Request.Path.StartsWithSegments("/api"),
+    branch => branch.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true));
 app.UseHttpsRedirection();
 
 app.UseStaticFiles();
@@ -215,6 +237,7 @@ app.Use(async (context, next) =>
     if (path.StartsWithSegments("/setup", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWithSegments("/auth/setup", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWithSegments("/health", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWithSegments("/_blazor", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWithSegments("/_framework", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWithSegments("/css", StringComparison.OrdinalIgnoreCase) ||
@@ -431,6 +454,10 @@ app.MapGet("/auth/logout", async (SignInManager<ApplicationUser> signInManager) 
     await signInManager.SignOutAsync();
     return Results.Redirect("/login");
 });
+
+// React front end (built from /web into wwwroot/app). Client-side routes fall back to index.html.
+app.MapNetipamApi();
+app.MapFallbackToFile("/app/{*path}", "app/index.html").AllowAnonymous();
 
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
