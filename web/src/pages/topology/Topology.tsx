@@ -8,10 +8,19 @@ import './topology.css';
 
 const bandClass = (b: TopoNode['wifiBand']) => (b === '2.4' ? 'wifi-24' : b === '6' ? 'wifi-6' : 'wifi-5');
 
+/** Inline SVG (an ethernet plug) — font glyphs like ⛓ render as tofu on many systems. */
+function WiredGlyph() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="5" y="3" width="14" height="10" rx="2" /><path d="M9 13v3M12 13v3M15 13v3M8 21v-3h8v3" />
+    </svg>
+  );
+}
+
 function LinkIcon({ n }: { n: TopoNode }) {
   return n.isWifi
     ? <span className={'topology-icon ' + bandClass(n.wifiBand)} title={n.connectionTooltip} role="img" aria-label={`Wi-Fi: ${n.connectionTooltip}`}>◠</span>
-    : <span className="topology-icon wired" title={n.connectionTooltip} role="img" aria-label="Wired">⛓</span>;
+    : <span className="topology-icon wired" title={n.connectionTooltip} role="img" aria-label="Wired"><WiredGlyph /></span>;
 }
 
 interface Model {
@@ -155,7 +164,7 @@ export default function Topology() {
         <button className="btn" onClick={expandAll}>Expand all</button>
       </div>
       <div className="topology-legend" aria-hidden>
-        <span><span className="topology-icon wired">⛓</span> wired</span>
+        <span><span className="topology-icon wired"><WiredGlyph /></span> wired</span>
         <span><span className="topology-icon wifi-24">◠</span> Wi-Fi 2.4G</span>
         <span><span className="topology-icon wifi-5">◠</span> Wi-Fi 5G</span>
         <span><span className="topology-icon wifi-6">◠</span> Wi-Fi 6G</span>

@@ -50,7 +50,7 @@ export default function Shell({ me, children }: { me: Me; children: React.ReactN
               <div key={g} className="nav-group">
                 <div className="nav-heading">{g}</div>
                 {react.map((n) => (
-                  <NavLink key={n.to} to={n.to} end={n.to === '/'} className={({ isActive }) => 'nav-item' + (isActive ? ' active' : '')}>
+                  <NavLink key={n.to} to={n.to} end={n.to === '/' || allNav.some((o) => o !== n && o.to.startsWith(n.to + '/'))} className={({ isActive }) => 'nav-item' + (isActive ? ' active' : '')}>
                     {n.label}
                   </NavLink>
                 ))}
@@ -68,8 +68,10 @@ export default function Shell({ me, children }: { me: Me; children: React.ReactN
             <strong>{me.name}</strong>
             <span>{me.roles.join(', ') || 'User'}</span>
           </div>
-          <Link className="btn ghost sm" to="/account/password">Change password</Link>
-          <button className="btn ghost sm" onClick={logout}>Log out</button>
+          <div className="foot-actions">
+            <Link className="btn ghost sm" to="/account/password">Change password</Link>
+            <button className="btn ghost sm" onClick={logout}>Log out</button>
+          </div>
         </div>
       </aside>
       <div className="content">
