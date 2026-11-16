@@ -22,6 +22,7 @@ builder.Services.AddSingleton<UnifiUpdaterControl>();
 builder.Services.AddSingleton<ProxmoxUpdaterControl>();
 builder.Services.AddSingleton<AppSettingsService>();
 builder.Services.AddSingleton<PingStatusService>();
+builder.Services.AddSingleton<NetworkScanService>();
 builder.Services.AddHostedService<UnifiOnlineStatusUpdater>();
 builder.Services.AddHostedService<ProxmoxHostMappingUpdater>();
 builder.Services.AddScoped<UiSessionStateService>();
@@ -280,17 +281,30 @@ app.UseHttpsRedirection();
 
 app.UseStaticFiles();
 
-// The React app is the primary UI: send the entry points there. The classic Blazor
-// pages remain reachable at their other paths until they are removed.
+// The React app is the primary UI. Every classic page path that the React app also serves
+// (bookmarks, links opened in a new tab, old redirects) is sent to its /app equivalent.
+var reactPages = new System.Text.RegularExpressions.Regex(
+    @"^/(about|access-panel|account/password|admin/users|alerts/(discovery|firmware|offline)|clients(/offline)?|client-types|" +
+    @"devices(/\d+/history)?|hosts|ip-history|locations(/\d+/devices)?|logs|racks(/view(/\d+)?)?|search|settings|" +
+    @"subnets(/\d+/(ips|clients/offline))?|topology|unifi-import|scan)/?$",
+    System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
 app.Use(async (context, next) =>
 {
-    if (HttpMethods.IsGet(context.Request.Method) &&
-        (context.Request.Path == "/" ||
-         context.Request.Path.Equals("/login", StringComparison.OrdinalIgnoreCase) ||
-         context.Request.Path.Equals("/setup", StringComparison.OrdinalIgnoreCase)))
+    if (HttpMethods.IsGet(context.Request.Method))
     {
-        context.Response.Redirect("/app/");
-        return;
+        var path = context.Request.Path.Value ?? "/";
+        if (path == "/" ||
+            path.Equals("/login", StringComparison.OrdinalIgnoreCase) ||
+            path.Equals("/setup", StringComparison.OrdinalIgnoreCase))
+        {
+            context.Response.Redirect("/app/");
+            return;
+        }
+        if (reactPages.IsMatch(path))
+        {
+            context.Response.Redirect("/app" + path.TrimEnd('/') + context.Request.QueryString);
+            return;
+        }
     }
     await next();
 });
