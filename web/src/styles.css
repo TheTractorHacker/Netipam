@@ -122,9 +122,16 @@ label.check { display: flex; align-items: center; gap: 8px; font-weight: 400; }
 .login { width: 100%; max-width: 380px; display: grid; gap: 14px; padding: 28px; margin: 0; }
 .login p { margin: 0 0 4px; }
 
+.menu-btn { display: none; margin-left: auto; }
 @media (max-width: 820px) {
   .shell { grid-template-columns: 1fr; }
-  .sidebar { position: static; height: auto; flex-direction: column; }
+  .sidebar { position: static; height: auto; flex-direction: column; padding-bottom: 8px; }
+  .sidebar .brand { padding-bottom: 8px; }
+  .menu-btn { display: inline-flex; }
+  .sidebar nav, .sidebar .sidebar-foot { display: none; }
+  .sidebar.open nav { display: block; }
+  .sidebar.open .sidebar-foot { display: grid; }
+  .topbar { position: static; }
   .page-header { flex-direction: column; align-items: flex-start; }
 }
 

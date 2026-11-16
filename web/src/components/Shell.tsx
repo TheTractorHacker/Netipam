@@ -1,4 +1,5 @@
-import { Link, NavLink } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { authApi, type Me } from '../auth';
 import { allNav, allOverlays, OPEN_SEARCH_EVENT, type NavEntry } from '../registry';
@@ -23,6 +24,9 @@ const norm = (p: string) => p.replace(/\/+$/, '').toLowerCase();
 
 export default function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
   const qc = useQueryClient();
+  const [navOpen, setNavOpen] = useState(false);
+  const loc = useLocation();
+  useEffect(() => setNavOpen(false), [loc.pathname]); // close the mobile menu after navigating
   const replaced = new Set(allNav.map((n) => n.replaces).filter(Boolean).map((p) => norm(p!)));
   const isAdmin = me.roles.includes('Admin');
   const canEdit = isAdmin || me.roles.includes('Editor');
@@ -36,12 +40,15 @@ export default function Shell({ me, children }: { me: Me; children: React.ReactN
 
   return (
     <div className="shell">
-      <aside className="sidebar">
+      <aside className={'sidebar' + (navOpen ? ' open' : '')}>
         <div className="brand">
           <span className="brand-mark" aria-hidden>N</span>
           <span>Netipam</span>
+          <button className="menu-btn btn ghost sm" aria-expanded={navOpen} aria-controls="main-nav" onClick={() => setNavOpen((o) => !o)}>
+            {navOpen ? 'Close' : 'Menu'}
+          </button>
         </div>
-        <nav>
+        <nav id="main-nav">
           {GROUPS.map((g) => {
             const react = allNav.filter((n) => n.group === g && visible(n)).sort((a, b) => a.order - b.order);
             const classic = CLASSIC.filter((c) => c.group === g && !replaced.has(norm(c.href)));
