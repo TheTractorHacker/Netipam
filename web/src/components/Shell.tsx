@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { authApi, type Me } from '../auth';
 import { allNav, allOverlays, OPEN_SEARCH_EVENT, type NavEntry } from '../registry';
@@ -68,6 +68,7 @@ export default function Shell({ me, children }: { me: Me; children: React.ReactN
             <strong>{me.name}</strong>
             <span>{me.roles.join(', ') || 'User'}</span>
           </div>
+          <Link className="btn ghost sm" to="/account/password">Change password</Link>
           <button className="btn ghost sm" onClick={logout}>Log out</button>
         </div>
       </aside>

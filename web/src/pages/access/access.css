@@ -1,0 +1,27 @@
+.access-group { margin-bottom: 26px; }
+.access-group-head { display: flex; align-items: baseline; gap: 10px; margin: 0 0 10px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.access-group-head h2 { margin: 0; font-size: 15px; }
+.access-group-head .muted { font-size: 12.5px; }
+.access-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.access-tile { display: grid; gap: 8px; padding: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); color: var(--text); text-decoration: none; transition: transform .12s ease, border-color .12s ease, box-shadow .12s ease; }
+a.access-tile:hover { transform: translateY(-2px); border-color: var(--accent); text-decoration: none; box-shadow: 0 6px 18px rgba(0, 0, 0, .12); }
+a.access-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.access-tile.nolink { opacity: .75; }
+.access-tile-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.access-ico { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: var(--panel-2); color: var(--muted); font-weight: 700; }
+.access-ico svg { width: 20px; height: 20px; fill: currentColor; }
+.access-name { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.access-meta { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.access-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; background: var(--muted); }
+.access-dot.ok { background: var(--ok); }
+.access-dot.bad { background: var(--bad); }
+
+.access-sort { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.access-sort li { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); }
+.access-sort li.dragging { opacity: .4; }
+.access-sort li.over { outline: 2px dashed var(--accent); outline-offset: 1px; }
+.access-handle { cursor: grab; color: var(--muted); user-select: none; padding: 0 4px; font-size: 16px; line-height: 1; }
+.access-sort .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.access-order-section { margin-bottom: 18px; }
+.access-order-section h3 { margin: 0 0 8px; font-size: 14px; }
+.access-order-section .hint { font-size: 12.5px; color: var(--muted); margin: 8px 0 0; }

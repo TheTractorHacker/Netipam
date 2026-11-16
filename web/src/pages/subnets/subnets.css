@@ -1,0 +1,54 @@
+.subnets-table th.c, .subnets-table td.c { text-align: center; }
+.subnets-table td { vertical-align: top; }
+.subnets-desc { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.subnets-util { display: grid; gap: 4px; min-width: 120px; }
+.subnets-bar { height: 6px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--line); overflow: hidden; }
+.subnets-bar span { display: block; height: 100%; border-radius: 999px; }
+.subnets-bar .ok { background: var(--ok); }
+.subnets-bar .warn { background: var(--warn); }
+.subnets-bar .bad { background: var(--bad); }
+.subnets-free { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.subnets-free input { width: 72px; }
+
+.subnets-form { display: grid; gap: 14px; }
+.subnets-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.subnets-preview { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; margin: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); font-size: 13px; }
+.subnets-preview dt { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+.subnets-preview dd { margin: 0; }
+@media (max-width: 560px) { .subnets-form-grid, .subnets-preview { grid-template-columns: 1fr; } .subnets-free { margin-left: 0; } }
+
+/* IP page */
+.subnets-back { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-size: 13px; margin-bottom: 6px; }
+.subnets-filters { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 14px; }
+.subnets-filters .search { max-width: 340px; flex: 1 1 220px; }
+.subnets-filters .select { width: auto; min-width: 130px; }
+.subnets-filters .switch { margin: 0; }
+
+.subnets-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; margin-bottom: 12px; font-size: 12px; color: var(--muted); }
+.subnets-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.subnets-legend .pct { margin-left: auto; color: var(--text); font-weight: 600; }
+.subnets-map { display: grid; grid-template-columns: repeat(auto-fill, minmax(38px, 1fr)); gap: 4px; }
+.subnets-cell { height: 30px; padding: 0; border-radius: 5px; font: inherit; font-size: 11px; font-variant-numeric: tabular-nums; cursor: pointer; border: 1px solid transparent; color: var(--text); }
+.subnets-cell:hover { transform: scale(1.12); z-index: 2; border-color: var(--text); }
+.subnets-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.subnets-cell.dim { opacity: .18; }
+.subnets-sw { display: inline-block; width: 14px; height: 14px; border-radius: 4px; border: 1px solid transparent; }
+.c-static { background: var(--accent); color: var(--accent-ink); }
+.c-dhcpused { background: var(--info); color: #fff; }
+.c-offline { background: transparent; border-color: var(--bad); color: var(--bad); }
+.c-reserved { background: var(--warn); color: #111; }
+.c-dhcp { background: transparent; border: 1px dashed var(--info); color: var(--info); }
+.c-deprecated { background: var(--bad); color: #fff; }
+.c-free { background: var(--panel-2); border-color: var(--line); color: var(--muted); }
+
+.subnets-stack { display: grid; gap: 4px; }
+.subnets-ips td { vertical-align: top; }
+.subnets-status { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.subnets-note { max-width: 220px; overflow-wrap: anywhere; }
+.subnets-detail { display: grid; gap: 16px; }
+.subnets-dev { border: 1px solid var(--line); border-radius: 8px; padding: 12px; display: grid; gap: 8px; background: var(--panel-2); }
+.subnets-dev dl { display: grid; grid-template-columns: 110px 1fr; gap: 6px 12px; margin: 0; font-size: 13px; }
+.subnets-dev dt { color: var(--muted); }
+.subnets-dev dd { margin: 0; overflow-wrap: anywhere; }
+.subnets-summary { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+.subnets-summary b { color: var(--text); font-weight: 600; }

@@ -3,8 +3,8 @@ import Devices from './Devices';
 
 const mod: AppModule = {
   routes: [
-    { path: '/devices', element: <Devices kind="device" title="Devices" /> },
-    { path: '/clients', element: <Devices kind="client" title="Clients" /> },
+    { path: '/devices', element: <Devices key="device" kind="device" title="Devices" /> },
+    { path: '/clients', element: <Devices key="client" kind="client" title="Clients" /> },
   ],
   nav: [
     { label: 'Devices', to: '/devices', group: 'Inventory', order: 10, replaces: '/devices' },

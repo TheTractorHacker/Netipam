@@ -1,0 +1,21 @@
+.users-name { display: flex; align-items: center; gap: 10px; font-weight: 500; }
+.users-avatar { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; flex: none;
+  background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); font-size: 12px; font-weight: 700; text-transform: uppercase; }
+.users-roles { display: flex; gap: 6px; flex-wrap: wrap; }
+.users-form { display: grid; gap: 14px; }
+.users-rules { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; font-size: 12px; color: var(--muted); }
+.users-rules li::before { content: '○'; display: inline-block; width: 16px; }
+.users-rules li.met { color: var(--ok); }
+.users-rules li.met::before { content: '✓'; }
+.users-roleopt { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; font-weight: 500; }
+.users-roleopt small { display: block; color: var(--muted); font-weight: 400; }
+.users-roleopt input { margin-top: 3px; }
+.users-roleopt:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.users-cards { display: none; }
+.users-setup { max-width: 420px; }
+.users-account { max-width: 560px; }
+@media (max-width: 640px) {
+  .users-table { display: none; }
+  .users-cards { display: grid; gap: 10px; }
+  .users-card { display: grid; gap: 10px; margin: 0; }
+}

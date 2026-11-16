@@ -1,0 +1,23 @@
+.search-input { max-width: 560px; }
+.search-groups { display: grid; gap: 22px; }
+.search-group-title { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.search-groups .table td .small { margin-top: 1px; }
+
+.cmdk-backdrop { position: fixed; inset: 0; z-index: 70; display: flex; justify-content: center; align-items: flex-start; padding: 12vh 16px 16px; background: rgba(5, 8, 14, .6); }
+.cmdk { width: 100%; max-width: 620px; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 24px 60px rgba(0,0,0,.45); overflow: hidden; }
+.cmdk-input { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.cmdk-input input { border: 0; background: transparent; height: 36px; padding: 0; font-size: 15px; }
+.cmdk-input input:focus-visible { outline: none; }
+.cmdk-list { list-style: none; margin: 0; padding: 6px; max-height: min(50vh, 420px); overflow-y: auto; }
+.cmdk-item { display: flex; align-items: baseline; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+.cmdk-item.on { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.cmdk-title { font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmdk-sub { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.cmdk-kind { margin-left: auto; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+.cmdk-note { padding: 10px 14px; }
+.cmdk-foot { display: flex; justify-content: space-between; gap: 12px; padding: 8px 14px; border-top: 1px solid var(--line); }
+@media (max-width: 520px) {
+  .cmdk-backdrop { padding-top: 6vh; }
+  .cmdk-keys { display: none; }
+  .cmdk-sub { display: none; }
+}

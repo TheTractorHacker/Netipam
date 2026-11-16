@@ -1,9 +1,12 @@
 import { useState, type FormEvent } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { authApi } from '../auth';
+import { usersApi } from './users/api';
 
 export default function Login() {
   const qc = useQueryClient();
+  const setup = useQuery({ queryKey: ['setup-status'], queryFn: usersApi.setupStatus, retry: false });
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(true);
@@ -48,6 +51,9 @@ export default function Login() {
         <button className="btn primary" disabled={busy || !username || !password}>
           {busy ? 'Signing in…' : 'Sign in'}
         </button>
+        {setup.data?.needed && (
+          <p className="muted">No users yet. <Link to="/setup">Create the first admin</Link></p>
+        )}
       </form>
     </div>
   );

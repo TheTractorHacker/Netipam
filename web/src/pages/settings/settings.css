@@ -1,0 +1,40 @@
+/* Explicit theme overrides (system = no data-theme attribute, handled by styles.css). */
+:root[data-theme='dark'] {
+  --bg: #0b0f17; --panel: #121826; --panel-2: #172033; --line: #222d42;
+  --text: #e6ebf5; --muted: #8a97b0; --accent: #5b8cff;
+  --ok: #34d399; --warn: #fbbf24; --bad: #f87171; --info: #60a5fa;
+  color-scheme: dark;
+}
+:root[data-theme='light'] {
+  --bg: #f5f7fb; --panel: #ffffff; --panel-2: #f0f3f9; --line: #e2e8f2;
+  --text: #172033; --muted: #66738c; --accent: #3b6df0;
+  --ok: #059669; --warn: #b45309; --bad: #dc2626; --info: #2563eb;
+  color-scheme: light;
+}
+
+.settings-wrap { max-width: 880px; }
+.settings-card h2 { margin-bottom: 4px; }
+.settings-card > p.muted { margin: 0 0 14px; }
+.settings-sub { margin: 18px 0 8px; font-size: 13px; font-weight: 600; }
+.settings-switches { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px 16px; }
+.settings-switches.off { opacity: .5; pointer-events: none; }
+.settings-foot { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; justify-content: flex-end; margin-top: 18px; }
+.settings-foot .grow { margin-right: auto; }
+.settings-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.settings-seg button { background: var(--panel-2); color: var(--muted); border: 0; padding: 7px 16px; font: inherit; cursor: pointer; }
+.settings-seg button + button { border-left: 1px solid var(--line); }
+.settings-seg button[aria-pressed='true'] { background: var(--accent); color: var(--accent-ink, #fff); }
+.settings-seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.settings-result { font-size: 13px; }
+.settings-result.ok { color: var(--ok); }
+.settings-result.bad { color: var(--bad); }
+.settings-secret { display: flex; gap: 8px; align-items: center; }
+.settings-secret input { flex: 1; min-width: 0; }
+.settings-danger { border-color: color-mix(in srgb, var(--bad) 50%, var(--line)); }
+.settings-danger h2 { color: var(--bad); }
+.settings-warn { border-color: color-mix(in srgb, var(--warn) 50%, var(--line)); }
+.settings-file { padding: 6px 0; }
+@media (max-width: 520px) {
+  .settings-foot { justify-content: stretch; }
+  .settings-foot .btn { flex: 1; }
+}

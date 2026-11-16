@@ -85,13 +85,16 @@ public static class DisplayFormat
 
         raw = raw.Trim();
 
-        if (Uri.TryCreate(raw, UriKind.Absolute, out var uri))
+        if (Uri.TryCreate(raw, UriKind.Absolute, out var uri)
+            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
         {
             href = uri.ToString();
             return true;
         }
 
-        if (Uri.TryCreate("http://" + raw, UriKind.Absolute, out var httpUri))
+        // Only prefix when the input has no explicit "://" (so javascript:/data:/file: URLs are rejected, host:8080 works).
+        if (!raw.Contains("://") && Uri.TryCreate("http://" + raw, UriKind.Absolute, out var httpUri)
+            && (httpUri.Scheme == Uri.UriSchemeHttp))
         {
             href = httpUri.ToString();
             return true;

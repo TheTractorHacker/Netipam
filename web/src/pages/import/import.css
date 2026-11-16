@@ -1,0 +1,32 @@
+.import-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; margin: 0 0 14px; padding: 0; list-style: none; counter-reset: step; }
+.import-steps li { counter-increment: step; display: flex; gap: 10px; align-items: center; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--muted); font-size: 13px; }
+.import-steps li::before { content: counter(step); display: grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--panel-2); font-weight: 700; font-size: 12px; color: var(--text); }
+.import-conn { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.import-conn .grow { flex: 1; min-width: 200px; }
+.import-status { display: flex; align-items: center; gap: 8px; }
+.import-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.import-panel-head h2 { margin: 0; }
+.import-panel-head .hint { margin: 2px 0 0; font-size: 13px; }
+.import-note { margin-bottom: 12px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); font-size: 13px; }
+.import-note.ok { border-color: color-mix(in srgb, var(--ok) 50%, var(--line)); }
+.import-note.bad { border-color: color-mix(in srgb, var(--bad) 50%, var(--line)); color: var(--bad); }
+.import-table input[type='checkbox'] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+.import-table td.cell-wrap { white-space: normal; min-width: 140px; }
+.import-table tr.is-unchanged td { color: var(--muted); }
+.import-table .changed-val { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); padding: 1px 8px; border-radius: 999px; font-size: 12.5px; white-space: nowrap; }
+.import-table tr.import-fields > td { background: var(--panel-2); padding: 12px 14px 14px 48px; }
+.import-fields-table { width: 100%; max-width: 640px; border-collapse: collapse; font-size: 13px; }
+.import-fields-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 4px 10px 4px 0; }
+.import-fields-table td { padding: 5px 10px 5px 0; border-top: 1px solid var(--line); }
+.import-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+.import-toolbar .search { max-width: 260px; flex: 1 1 180px; }
+.import-toolbar .push { margin-left: auto; }
+.import-result { display: flex; gap: 20px; flex-wrap: wrap; }
+.import-result strong { font-size: 22px; display: block; }
+.import-expand { background: none; border: 0; color: var(--muted); cursor: pointer; width: 26px; height: 26px; border-radius: 6px; font-size: 14px; }
+.import-expand:hover { background: var(--panel-2); color: var(--text); }
+@media (max-width: 640px) {
+  .import-toolbar .push { margin-left: 0; width: 100%; }
+  .import-toolbar .push .btn { flex: 1; }
+  .import-table tr.import-fields > td { padding-left: 14px; }
+}

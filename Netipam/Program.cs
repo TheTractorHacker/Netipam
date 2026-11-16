@@ -238,6 +238,7 @@ app.Use(async (context, next) =>
         path.StartsWithSegments("/auth/setup", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWithSegments("/health", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWithSegments("/app", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWithSegments("/_blazor", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWithSegments("/_framework", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWithSegments("/css", StringComparison.OrdinalIgnoreCase) ||
