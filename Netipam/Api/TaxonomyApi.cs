@@ -97,6 +97,8 @@ public sealed class TaxonomyApi : IApiModule
         {
             var name = req.Name?.Trim();
             if (string.IsNullOrEmpty(name)) return Results.BadRequest(new { error = "Name is required." });
+            if (await db.Locations.AnyAsync(l => l.Name.ToLower() == name.ToLower(), ct))
+                return Results.Conflict(new { error = $"A location named '{name}' already exists." });
             var e = new Location { Name = name, Description = Clean(req.Description) };
             db.Locations.Add(e);
             await db.SaveChangesAsync(ct);

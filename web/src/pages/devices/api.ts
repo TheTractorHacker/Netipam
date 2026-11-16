@@ -12,7 +12,7 @@ export interface DeviceRow {
   assetNumber: string | null; manufacturer: string | null; model: string | null; operatingSystem: string | null;
   source: string | null; usedNew: string | null; sourceDate: string | null; sourceDateText: string | null;
   description: string | null;
-  hostDeviceId: number | null; hostName: string | null;
+  hostDeviceId: number | null; hostDeviceName: string | null;
   isProxmoxHost: boolean; proxmoxInstanceId: number | null; proxmoxInstance: string | null; proxmoxNodeIdentifier: string | null;
   isTopologyRoot: boolean; manualUpstreamDeviceId: number | null; manualUpstreamName: string | null;
   upstream: string | null; connectionType: string | null; connectionDetail: string | null; connectionTooltip: string | null;

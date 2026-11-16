@@ -215,9 +215,28 @@ if (builder.Configuration.GetValue<bool>("Netipam:AutoMigrate"))
 
 await IdentitySeed.EnsureSeededAsync(app.Services, app.Configuration);
 
+// /api always answers with JSON (never the Blazor error page), in every environment.
+app.UseWhen(
+    ctx => ctx.Request.Path.StartsWithSegments("/api"),
+    branch => branch.UseExceptionHandler(handler => handler.Run(async ctx =>
+    {
+        var ex = ctx.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
+        if (ex is Microsoft.EntityFrameworkCore.DbUpdateException)
+        {
+            // Unique-key / foreign-key violations: surface as a conflict instead of a crash.
+            ctx.Response.StatusCode = StatusCodes.Status409Conflict;
+            await ctx.Response.WriteAsJsonAsync(new { error = "That change conflicts with existing data (a duplicate name, or the item is in use)." });
+            return;
+        }
+        ctx.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        await ctx.Response.WriteAsJsonAsync(new { error = "Unexpected server error. Check the Netipam logs for details." });
+    })));
+
 if (!app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler("/Error", createScopeForErrors: true);
+    app.UseWhen(
+        ctx => !ctx.Request.Path.StartsWithSegments("/api"),
+        branch => branch.UseExceptionHandler("/Error", createScopeForErrors: true));
     app.UseHsts();
 }
 

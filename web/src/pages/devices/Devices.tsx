@@ -56,7 +56,7 @@ const COLS: Col[] = [
   { key: 'MAC', label: 'MAC', kinds: ['device', 'client'], sort: (d) => str(d.macAddress), cell: (d) => d.macAddress ? <span className="mono muted">{d.macAddress}</span> : <Dash v={null} /> },
   { key: 'Conn', label: 'Conn', kinds: ['device', 'client'], th: 'w1', sort: (d) => str(d.connectionType), cell: (d) => <ConnIcon d={d} /> },
   { key: 'Upstream', label: 'Upstream', kinds: ['device', 'client'], sort: (d) => str(d.upstream), cell: (d) => <Dash v={d.upstream} /> },
-  { key: 'Host', label: 'Host', kinds: ['client'], sort: (d) => str(d.hostName), cell: (d) => <Dash v={d.hostName} /> },
+  { key: 'Host', label: 'Host', kinds: ['client'], sort: (d) => str(d.hostDeviceName), cell: (d) => <Dash v={d.hostDeviceName} /> },
   { key: 'Location', label: 'Location', kinds: ['device', 'client'], sort: (d) => str(d.location), cell: (d) => <Dash v={d.location} /> },
   { key: 'Rack', label: 'Rack', kinds: ['device', 'client'], sort: (d) => str(d.rackName) + String(d.rackUPosition ?? 0).padStart(3, '0'), cell: (d) => <Dash v={d.rack} /> },
   { key: 'Asset', label: 'Asset #', kinds: ['device'], sort: (d) => str(d.assetNumber), cell: (d) => <Dash v={d.assetNumber} /> },

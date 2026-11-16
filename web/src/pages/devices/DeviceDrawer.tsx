@@ -88,7 +88,7 @@ export default function DeviceDrawer({ id, canEdit, withLastSeen, onClose, onEdi
                 <Item label="Subnet">{d.subnet && <a href={`/subnets/${d.subnetId}/ips`}>{d.subnet}</a>}</Item>
                 <Item label="Connection">{d.connectionTooltip}</Item>
                 <Item label="Upstream">{d.upstream}</Item>
-                <Item label="Host">{d.hostName}</Item>
+                <Item label="Host">{d.hostDeviceName}</Item>
                 <Item label="Manual upstream">{d.manualUpstreamName}</Item>
               </dl>
 

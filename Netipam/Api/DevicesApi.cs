@@ -24,7 +24,7 @@ public sealed class DevicesApi : IApiModule
         string? AssetNumber, string? Manufacturer, string? Model, string? OperatingSystem,
         string? Source, string? UsedNew, string? SourceDate, string? SourceDateText,
         string? Description,
-        int? HostDeviceId, string? HostName, bool IsProxmoxHost, int? ProxmoxInstanceId, string? ProxmoxInstance, string? ProxmoxNodeIdentifier,
+        int? HostDeviceId, string? HostDeviceName, bool IsProxmoxHost, int? ProxmoxInstanceId, string? ProxmoxInstance, string? ProxmoxNodeIdentifier,
         bool IsTopologyRoot, int? ManualUpstreamDeviceId, string? ManualUpstreamName,
         string? Upstream, string? ConnectionType, string? ConnectionDetail, string? ConnectionTooltip, string? WifiTone,
         bool IsOnline, bool IsStatusTracked, bool IsCritical, bool IgnoreOffline,
