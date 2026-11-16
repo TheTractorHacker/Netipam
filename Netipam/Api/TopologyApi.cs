@@ -19,13 +19,36 @@ public sealed class TopologyApi : IApiModule
             var byName = BuildNameLookup(devices);
             var byMac = BuildMacLookup(devices);
 
+            // Resolve parents once, then break any cycles (cut at the lowest id) so every device stays reachable.
+            var resolved = devices.ToDictionary(d => d.Id, d => ResolveParent(d, byId, byName, byMac));
+            var cut = new HashSet<int>();
+            var state = new Dictionary<int, int>(); // 1 = visiting, 2 = done
+            foreach (var start in devices)
+            {
+                if (state.ContainsKey(start.Id)) continue;
+                var path = new List<int>();
+                int? cur = start.Id;
+                while (cur is int c && !state.ContainsKey(c))
+                {
+                    state[c] = 1; path.Add(c);
+                    cur = resolved[c]?.Id;
+                }
+                if (cur is int hit && state[hit] == 1)
+                {
+                    var cycle = path.Skip(path.IndexOf(hit)).ToList();
+                    cut.Add(cycle.Min());
+                }
+                foreach (var p in path) state[p] = 2;
+            }
+
             var nodes = devices.Select(d =>
             {
-                var parent = ResolveParent(d, byId, byName, byMac);
-                var upstreamName = parent?.Name ?? d.UpstreamDeviceName ?? ExtractUpstreamNameFromDetail(d.ConnectionDetail);
+                var resolvedParent = resolved[d.Id];
+                var parent = cut.Contains(d.Id) ? null : resolvedParent;
+                var upstreamName = resolvedParent?.Name ?? d.UpstreamDeviceName ?? ExtractUpstreamNameFromDetail(d.ConnectionDetail);
                 var upstreamConn = d.HostDeviceId is not null ? "Hosted" : d.UpstreamConnection ?? d.ConnectionDetail;
                 var isGateway = IsGateway(d);
-                var unassigned = parent is null
+                var unassigned = resolvedParent is null
                     && string.IsNullOrWhiteSpace(upstreamName)
                     && string.IsNullOrWhiteSpace(upstreamConn)
                     && !d.IsTopologyRoot

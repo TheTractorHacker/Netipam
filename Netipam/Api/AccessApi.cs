@@ -114,6 +114,7 @@ public sealed class AccessApi : IApiModule
             var seenDevs = new HashSet<int>();
             foreach (var list in body.Items ?? new())
             {
+                if (list is null) continue;
                 var n = 0;
                 foreach (var id in list.DeviceIds ?? new())
                 {

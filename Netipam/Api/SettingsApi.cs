@@ -96,6 +96,9 @@ public sealed class SettingsApi : IApiModule
             if (r.UpdaterLogRetentionHours < 1 || r.UpdaterLogRetentionHours > 8760)
                 return Results.BadRequest(new { error = "Log retention must be 1-8760 hours." });
 
+            var lenErr = TooLong(("Site title", r.SiteTitle, 64), ("Date format", r.DateFormat, 64), ("Theme name", r.ThemeName, 64));
+            if (lenErr is not null) return Results.BadRequest(new { error = lenErr });
+
             var title = string.IsNullOrWhiteSpace(r.SiteTitle) ? "Netipam" : r.SiteTitle.Trim();
             var date = string.IsNullOrWhiteSpace(r.DateFormat) ? DateFormats[0] : r.DateFormat.Trim();
             var theme = MainLayout.NormalizeThemeName(r.ThemeName);
@@ -120,6 +123,10 @@ public sealed class SettingsApi : IApiModule
                 return Results.BadRequest(new { error = "Updater interval must be 30-86400 seconds." });
             if (r.KnownClientCutoffDays < 0 || r.KnownClientCutoffDays > 3650)
                 return Results.BadRequest(new { error = "Known client cutoff must be 0-3650 days." });
+
+            var lenErr = TooLong(("UniFi URL", r.BaseUrl, 255), ("Site name", r.SiteName, 64), ("Username", r.Username, 128),
+                ("Password", r.Password, 512), ("API key", r.ApiKey, 512));
+            if (lenErr is not null) return Results.BadRequest(new { error = lenErr });
 
             var interval = r.UpdaterIntervalSeconds <= 0 ? 0 : Math.Clamp(r.UpdaterIntervalSeconds, MinInterval, 86400);
 
@@ -237,7 +244,7 @@ public sealed class SettingsApi : IApiModule
             return Results.Ok(new { ok = true });
         });
 
-        g.MapPost("/proxmox/test", async (ProxmoxTestRequest r, AppDbContext db, AppSettingsService settings, ProxmoxApiClient client) =>
+        g.MapPost("/proxmox/test", async (ProxmoxTestRequest r, AppDbContext db, AppSettingsService settings, ProxmoxApiClient client, CancellationToken ct) =>
         {
             try
             {
@@ -247,13 +254,13 @@ public sealed class SettingsApi : IApiModule
                 if (string.IsNullOrWhiteSpace(secret) && r.Id is int id)
                 {
                     var stored = await db.ProxmoxInstances.AsNoTracking()
-                        .Where(p => p.Id == id).Select(p => new { p.BaseUrl, p.ApiTokenSecretProtected }).FirstOrDefaultAsync();
+                        .Where(p => p.Id == id).Select(p => new { p.BaseUrl, p.ApiTokenSecretProtected }).FirstOrDefaultAsync(ct);
                     if (stored is not null && NormUrl(stored.BaseUrl) != NormUrl(baseUrl))
                         return Results.Ok(new { ok = false, message = "Enter the API token secret to test a different URL than the saved one." });
                     secret = settings.Unprotect(stored?.ApiTokenSecretProtected);
                 }
 
-                using var doc = await client.GetVmResourcesAsync(baseUrl, tokenId, secret ?? "");
+                using var doc = await client.GetVmResourcesAsync(baseUrl, tokenId, secret ?? "", ct);
                 var count = 0;
                 if (doc.RootElement.ValueKind == JsonValueKind.Object &&
                     doc.RootElement.TryGetProperty("data", out var data) &&
@@ -261,6 +268,11 @@ public sealed class SettingsApi : IApiModule
                     count = data.GetArrayLength();
 
                 return Results.Ok(new { ok = true, message = $"Proxmox responded with {count} VM/CT resource rows.", count });
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex) when (ex is TaskCanceledException || ex.InnerException is TimeoutException)
+            {
+                return Results.Ok(new { ok = false, message = "Timed out connecting to Proxmox. Check the URL and network reachability." });
             }
             catch (Exception ex)
             {
@@ -290,9 +302,14 @@ public sealed class SettingsApi : IApiModule
                 });
                 form = await feature.ReadFormAsync(ct);
             }
-            catch (Exception ex) when (ex is InvalidDataException or Microsoft.AspNetCore.Http.BadHttpRequestException)
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex)
             {
-                return Results.Json(new { error = "Backup file is too large (max 200 MB)." }, statusCode: 413);
+                var tooLarge = ex is Microsoft.AspNetCore.Http.BadHttpRequestException { StatusCode: 413 }
+                    || (ex is InvalidDataException && ex.Message.Contains("limit", StringComparison.OrdinalIgnoreCase));
+                return tooLarge
+                    ? Results.Json(new { error = "Backup file is too large (max 200 MB)." }, statusCode: 413)
+                    : Results.BadRequest(new { error = "Invalid multipart body." });
             }
             var file = form.Files.GetFile("file") ?? form.Files.FirstOrDefault();
             if (file is null || file.Length == 0)
@@ -364,6 +381,15 @@ public sealed class SettingsApi : IApiModule
         if (isNew && string.IsNullOrWhiteSpace(r.ApiTokenSecret))
             return "Proxmox API token secret is required for new profiles.";
         _ = existingHasSecret;
+        return TooLong(("Proxmox profile name", r.Name, 100), ("Proxmox URL", r.BaseUrl, 255),
+            ("Proxmox API token ID", r.ApiTokenId, 255), ("Proxmox API token secret", r.ApiTokenSecret, 512));
+    }
+
+    private static string? TooLong(params (string Label, string? Value, int Max)[] fields)
+    {
+        foreach (var (label, value, max) in fields)
+            if (value is not null && value.Trim().Length > max)
+                return $"{label} must be at most {max} characters.";
         return null;
     }
 
@@ -408,7 +434,10 @@ public sealed class SettingsApi : IApiModule
     private static async Task EnsureProxmoxClientTypesAsync(AppDbContext db, CancellationToken ct)
     {
         var existing = await db.ClientTypes.ToListAsync(ct);
-        var byName = existing.ToDictionary(t => t.Name.Trim(), t => t, StringComparer.OrdinalIgnoreCase);
+        // Names may differ only by case/whitespace; keep the first of each (lowest id) instead of throwing.
+        var byName = new Dictionary<string, ClientType>(StringComparer.OrdinalIgnoreCase);
+        foreach (var t in existing.OrderBy(t => t.Id))
+            byName.TryAdd(t.Name.Trim(), t);
         var changed = false;
 
         if (!byName.TryGetValue("Proxmox Server", out var server))

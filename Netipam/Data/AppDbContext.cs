@@ -42,7 +42,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(ct => ct.Name).HasMaxLength(100).IsRequired();
             entity.HasIndex(ct => ct.Name).IsUnique();
             entity.Property(ct => ct.Description).HasMaxLength(500);
-            entity.Property(ct => ct.Icon).HasMaxLength(128);
+            entity.Property(ct => ct.Icon).HasMaxLength(4000);
 
             entity.Property(ct => ct.IsHost).HasDefaultValue(false);
 

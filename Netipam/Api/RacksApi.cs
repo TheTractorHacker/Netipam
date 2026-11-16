@@ -206,7 +206,7 @@ public sealed class RacksApi : IApiModule
     private static string? Clean(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 
     // Errors starting with DuplicateMarker map to 409, all others to 400.
-    private static IResult Fail(string err) => err.StartsWith(DuplicateMarker)
+    private static IResult Fail(string err) => err.StartsWith(DuplicateMarker, StringComparison.Ordinal)
         ? Results.Conflict(new { error = err[DuplicateMarker.Length..] })
         : Results.BadRequest(new { error = err });
 

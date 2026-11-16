@@ -29,15 +29,9 @@ public static class IpCidr
             return false;
         }
 
-        if (!IPAddress.TryParse(ip.Trim(), out var addr))
+        if (!TryParseStrictDottedQuad(ip.Trim(), out var addr))
         {
             error = "Invalid IP address format.";
-            return false;
-        }
-
-        if (addr.AddressFamily != AddressFamily.InterNetwork)
-        {
-            error = "Only IPv4 addresses are supported.";
             return false;
         }
 
@@ -57,7 +51,7 @@ public static class IpCidr
         }
 
         cidr = cidr.Trim();
-        var parts = cidr.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var parts = cidr.Split('/');
         if (parts.Length != 2)
         {
             error = "CIDR must be in the format x.x.x.x/NN";
@@ -67,13 +61,13 @@ public static class IpCidr
         var ipPart = parts[0];
         var prefixPart = parts[1];
 
-        if (!IPAddress.TryParse(ipPart, out var ipAddr) || ipAddr.AddressFamily != AddressFamily.InterNetwork)
+        if (!TryParseStrictDottedQuad(ipPart, out var ipAddr))
         {
             error = "CIDR base address must be a valid IPv4 address.";
             return false;
         }
 
-        if (!int.TryParse(prefixPart, out var prefix) || prefix < 0 || prefix > 32)
+        if (!IsPlainNumber(prefixPart, 2) || !int.TryParse(prefixPart, out var prefix) || prefix < 0 || prefix > 32)
         {
             error = "CIDR prefix length must be an integer from 0 to 32.";
             return false;
@@ -139,6 +133,30 @@ public static class IpCidr
         );
 
         return true;
+    }
+
+    // Strict dotted quad: exactly four decimal octets, 0-255, no leading zeros, no signs or spaces.
+    private static bool TryParseStrictDottedQuad(string text, out IPAddress addr)
+    {
+        addr = IPAddress.None;
+        var parts = text.Split('.');
+        if (parts.Length != 4) return false;
+        var bytes = new byte[4];
+        for (var i = 0; i < 4; i++)
+        {
+            if (!IsPlainNumber(parts[i], 3) || !int.TryParse(parts[i], out var n) || n > 255) return false;
+            bytes[i] = (byte)n;
+        }
+        addr = new IPAddress(bytes);
+        return true;
+    }
+
+    // ASCII digits only, at most maxLen long, no leading zero (except "0" itself).
+    private static bool IsPlainNumber(string s, int maxLen)
+    {
+        if (s.Length == 0 || s.Length > maxLen) return false;
+        foreach (var c in s) if (c < '0' || c > '9') return false;
+        return s.Length == 1 || s[0] != '0';
     }
 
     public static uint PrefixToMask(int prefixLength)

@@ -11,7 +11,9 @@ public sealed class AuthApi : IApiModule
     {
         api.MapPost("/auth/login", async (LoginRequest req, SignInManager<ApplicationUser> signIn) =>
         {
-            var result = await signIn.PasswordSignInAsync(req.Username ?? "", req.Password ?? "", req.RememberMe, lockoutOnFailure: false);
+            var result = await signIn.PasswordSignInAsync(req.Username ?? "", req.Password ?? "", req.RememberMe, lockoutOnFailure: true);
+            if (result.IsLockedOut)
+                return Results.Json(new { ok = false, error = "Too many failed attempts. Try again in a few minutes." }, statusCode: 429);
             return result.Succeeded
                 ? Results.Ok(new { ok = true })
                 : Results.Json(new { ok = false, error = "Invalid username or password." }, statusCode: 401);

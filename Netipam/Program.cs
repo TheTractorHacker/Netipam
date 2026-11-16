@@ -108,9 +108,17 @@ builder.Services
 
         options.SignIn.RequireConfirmedAccount = false;
         options.User.RequireUniqueEmail = false;
+
+        options.Lockout.AllowedForNewUsers = true;
+        options.Lockout.MaxFailedAccessAttempts = 5;
+        options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
     })
     .AddEntityFrameworkStores<AppDbContext>()
     .AddDefaultTokenProviders();
+
+// Validate the security stamp on every request so role changes, password resets and
+// user deletion take effect immediately (and cookie roles are refreshed).
+builder.Services.Configure<SecurityStampValidatorOptions>(o => o.ValidationInterval = TimeSpan.Zero);
 
 // Force any auth “challenge” redirect to our Blazor login page
 builder.Services.ConfigureApplicationCookie(options =>
@@ -175,12 +183,17 @@ builder.Services.AddHttpClient<UnifiApiClient>()
         };
     });
 builder.Services.AddHttpClient<ProxmoxApiClient>()
+    .ConfigureHttpClient(c => c.Timeout = TimeSpan.FromSeconds(30))
     .ConfigurePrimaryHttpMessageHandler(() =>
     {
-        return new HttpClientHandler
+        // Short connect timeout so an unroutable host fails in seconds, not 100.
+        return new SocketsHttpHandler
         {
-            ServerCertificateCustomValidationCallback =
-                HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+            ConnectTimeout = TimeSpan.FromSeconds(5),
+            SslOptions = new System.Net.Security.SslClientAuthenticationOptions
+            {
+                RemoteCertificateValidationCallback = (_, _, _, _) => true
+            }
         };
     });
 
@@ -414,7 +427,7 @@ app.MapPost("/auth/login", async (
     if (!Uri.TryCreate(returnUrl, UriKind.Relative, out _))
         returnUrl = "/";
 
-    var result = await signInManager.PasswordSignInAsync(username, password, rememberMe, lockoutOnFailure: false);
+    var result = await signInManager.PasswordSignInAsync(username, password, rememberMe, lockoutOnFailure: true);
 
     if (result.Succeeded)
         return Results.LocalRedirect(returnUrl);

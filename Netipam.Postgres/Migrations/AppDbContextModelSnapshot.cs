@@ -550,8 +550,8 @@ namespace Netipam.Postgres.Migrations
                         .HasColumnType("character varying(500)");
 
                     b.Property<string>("Icon")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
 
                     b.Property<bool>("IsDevice")
                         .HasColumnType("boolean");

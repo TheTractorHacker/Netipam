@@ -531,7 +531,7 @@ namespace Netipam.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Icon")
-                        .HasMaxLength(128)
+                        .HasMaxLength(4000)
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("IsDevice")

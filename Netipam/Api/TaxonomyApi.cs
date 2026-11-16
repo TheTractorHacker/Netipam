@@ -97,6 +97,7 @@ public sealed class TaxonomyApi : IApiModule
         {
             var name = req.Name?.Trim();
             if (string.IsNullOrEmpty(name)) return Results.BadRequest(new { error = "Name is required." });
+            if (Validate(name, Clean(req.Description), null) is { } bad) return bad;
             if (await db.Locations.AnyAsync(l => l.Name.ToLower() == name.ToLower(), ct))
                 return Results.Conflict(new { error = $"A location named '{name}' already exists." });
             var e = new Location { Name = name, Description = Clean(req.Description) };
@@ -111,6 +112,9 @@ public sealed class TaxonomyApi : IApiModule
             if (e is null) return Results.NotFound(new { error = "Location not found." });
             var name = req.Name?.Trim();
             if (string.IsNullOrEmpty(name)) return Results.BadRequest(new { error = "Name is required." });
+            if (Validate(name, Clean(req.Description), null) is { } bad) return bad;
+            if (await db.Locations.AnyAsync(l => l.Id != id && l.Name.ToLower() == name.ToLower(), ct))
+                return Results.Conflict(new { error = $"A location named '{name}' already exists." });
             var oldLower = e.Name.ToLower();
             if (oldLower != name.ToLower())
             {
@@ -172,6 +176,9 @@ public sealed class TaxonomyApi : IApiModule
             var icon = Clean(req.Icon);
             if (icon is not null && !IconOptions.Any(o => o.Svg == icon))
                 return Results.BadRequest(new { error = "Unknown icon." });
+            if (Validate(name, Clean(req.Description), icon) is { } bad) return bad;
+            if (await db.ClientTypes.AnyAsync(t => t.Name.ToLower() == name.ToLower(), ct))
+                return Results.Conflict(new { error = $"A client type named '{name}' already exists." });
             var e = new ClientType
             {
                 Name = name, Description = Clean(req.Description), Icon = icon,
@@ -188,11 +195,14 @@ public sealed class TaxonomyApi : IApiModule
             if (e is null) return Results.NotFound(new { error = "Client type not found." });
             var name = req.Name?.Trim();
             if (string.IsNullOrEmpty(name)) return Results.BadRequest(new { error = "Name is required." });
-            e.Name = name;
-            e.Description = Clean(req.Description);
             var icon = Clean(req.Icon);
             if (icon is not null && icon != e.Icon && !IconOptions.Any(o => o.Svg == icon))
                 return Results.BadRequest(new { error = "Unknown icon." });
+            if (Validate(name, Clean(req.Description), icon != e.Icon ? icon : null) is { } bad) return bad;
+            if (await db.ClientTypes.AnyAsync(t => t.Id != id && t.Name.ToLower() == name.ToLower(), ct))
+                return Results.Conflict(new { error = $"A client type named '{name}' already exists." });
+            e.Name = name;
+            e.Description = Clean(req.Description);
             e.Icon = icon;
             e.IsDevice = req.IsDevice;
             e.IsHost = req.IsHost;
@@ -210,6 +220,22 @@ public sealed class TaxonomyApi : IApiModule
             await db.SaveChangesAsync(ct);
             return Results.Ok(new { ok = true });
         }).RequireAuthorization("CanEdit");
+    }
+
+    // Mirrors the DB column limits (AppDbContext) so both providers answer identically.
+    private const int MaxName = 100, MaxDescription = 500, MaxIcon = 4000;
+
+    private static IResult? Validate(string name, string? description, string? icon)
+    {
+        if (name.Contains('\0') || (description?.Contains('\0') ?? false))
+            return Results.BadRequest(new { error = "Text contains an invalid (null) character." });
+        if (name.Length > MaxName)
+            return Results.BadRequest(new { error = $"Name must be at most {MaxName} characters." });
+        if (description is not null && description.Length > MaxDescription)
+            return Results.BadRequest(new { error = $"Description must be at most {MaxDescription} characters." });
+        if (icon is not null && icon.Length > MaxIcon)
+            return Results.BadRequest(new { error = $"Icon data is longer than the {MaxIcon}-character database column allows." });
+        return null;
     }
 
     private static string? Clean(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();

@@ -190,7 +190,7 @@ public sealed class UnifiImportService
 
         foreach (var r in list)
         {
-            var macKey = UnifiParsers.NormalizeMac(r.Mac);
+            var macKey = RequireMac(r.Mac);
             if (!ctx.ByMac.TryGetValue(macKey, out var entity))
             {
                 entity = new Device { IsStatusTracked = true };
@@ -204,7 +204,7 @@ public sealed class UnifiImportService
                 !string.IsNullOrWhiteSpace(r.Name) ? Cap(r.Name, MaxText)! :
                 !string.IsNullOrWhiteSpace(r.Hostname) ? Cap(r.Hostname, MaxText)! : macKey;
             entity.Hostname = Cap(r.Hostname, MaxText);
-            entity.IpAddress = Cap(r.IpAddress, 64);
+            entity.IpAddress = CleanIp(r.IpAddress);
             entity.IsOnline = r.IsOnline;
             if (r.IsOnline) { entity.LastSeenAt = DateTime.UtcNow; entity.LastOnlineAt = DateTime.UtcNow; }
             entity.Manufacturer = Cap(r.Manufacturer, MaxText);
@@ -328,7 +328,7 @@ public sealed class UnifiImportService
 
         foreach (var r in list)
         {
-            var macKey = UnifiParsers.NormalizeMac(r.Mac);
+            var macKey = RequireMac(r.Mac);
             if (!ctx.ByMac.TryGetValue(macKey, out var entity))
             {
                 entity = new Device { IsStatusTracked = true };
@@ -343,7 +343,7 @@ public sealed class UnifiImportService
             if (r.MappedTypeId is not null) entity.ClientTypeId = r.MappedTypeId;
 
             entity.Name = !string.IsNullOrWhiteSpace(r.Name) ? Cap(r.Name, MaxText)! : macKey;
-            entity.IpAddress = Cap(r.IpAddress, 64);
+            entity.IpAddress = CleanIp(r.IpAddress);
             entity.IsOnline = r.IsOnline;
             if (r.IsOnline) { entity.LastSeenAt = DateTime.UtcNow; entity.LastOnlineAt = DateTime.UtcNow; }
 
@@ -405,7 +405,7 @@ public sealed class UnifiImportService
     /// <summary>Trim and cap length; empty becomes null.</summary>
     private static string? Cap(string? v, int max)
     {
-        var t = v?.Trim();
+        var t = v is null ? null : new string(v.Where(ch => !char.IsControl(ch)).ToArray()).Trim();
         if (string.IsNullOrEmpty(t)) return null;
         return t.Length > max ? t[..max] : t;
     }
@@ -423,7 +423,7 @@ public sealed class UnifiImportService
 
         foreach (var r in rows)
         {
-            var mac = UnifiParsers.NormalizeMac(r.Mac);
+            var mac = RequireMac(r.Mac);
             var applyKeys = new HashSet<string>(r.Apply ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
             var applyFields = (r.Fields ?? new List<UpdateFieldRow>()).Where(f => f.Changed && applyKeys.Contains(f.Key)).ToList();
 
@@ -479,7 +479,7 @@ public sealed class UnifiImportService
                         !string.IsNullOrWhiteSpace(f.Incoming) ? Cap(f.Incoming, MaxText)! : FallbackName(entity);
                     break;
                 case "hostname": entity.Hostname = Cap(f.Incoming, MaxText); break;
-                case "ipAddress": entity.IpAddress = Cap(f.Incoming, 64); break;
+                case "ipAddress": entity.IpAddress = CleanIp(f.Incoming); break;
             }
         }
     }
@@ -552,16 +552,38 @@ public sealed class UnifiImportService
 
     private static string? TrimOrNull(string? v) => string.IsNullOrWhiteSpace(v) ? null : v.Trim();
 
+    private static readonly System.Text.RegularExpressions.Regex MacRx =
+        new("^([0-9a-f]{2}:){5}[0-9a-f]{2}$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>Normalise and validate a MAC; throws (surfaced as a 400) when malformed.</summary>
+    private static string RequireMac(string? mac)
+    {
+        var m = UnifiParsers.NormalizeMac(mac ?? "");
+        if (!MacRx.IsMatch(m))
+            throw new InvalidOperationException($"Invalid MAC address '{Cap(mac, 40)}'.");
+        return m;
+    }
+
+    /// <summary>Trim, cap and require a parseable IP address; empty becomes null.</summary>
+    private static string? CleanIp(string? ip)
+    {
+        var v = Cap(ip, 64);
+        if (v is null) return null;
+        if (!System.Net.IPAddress.TryParse(v, out _) || v.Any(char.IsWhiteSpace))
+            throw new InvalidOperationException($"Invalid IP address '{v}'.");
+        return v;
+    }
+
     private static string? NormalizeMacOrNull(string? mac) =>
         string.IsNullOrWhiteSpace(mac) ? null : UnifiParsers.NormalizeMac(mac);
 
     private static void ApplyConnection(Device entity, string? type, string? detail, string? upName, string? upMac, string? upConn)
     {
-        var t = TrimOrNull(type); if (t != null) entity.ConnectionType = t;
-        var d = TrimOrNull(detail); if (d != null) entity.ConnectionDetail = d;
-        var n = TrimOrNull(upName); if (n != null) entity.UpstreamDeviceName = n;
-        var m = NormalizeMacOrNull(upMac); if (m != null) entity.UpstreamDeviceMac = m;
-        var c = TrimOrNull(upConn); if (c != null) entity.UpstreamConnection = c;
+        var t = Cap(type, 32); if (t != null) entity.ConnectionType = t;
+        var d = Cap(detail, 255); if (d != null) entity.ConnectionDetail = d;
+        var n = Cap(upName, 255); if (n != null) entity.UpstreamDeviceName = n;
+        var m = Cap(upMac, 64) is { } um ? RequireMac(um) : null; if (m != null) entity.UpstreamDeviceMac = m;
+        var c = Cap(upConn, 255); if (c != null) entity.UpstreamConnection = c;
     }
 
     private static void UpsertName(IDictionary<string, Device> map, Device entity)

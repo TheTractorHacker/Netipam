@@ -39,6 +39,7 @@ public sealed class SubnetsApi : IApiModule
             }
 
             var devices = await db.Devices.AsNoTracking()
+                .Where(d => d.IpAddress != null && d.IpAddress != "")
                 .Select(d => new DeviceLite(d.SubnetId, d.IpAddress, d.IsOnline,
                     d.ClientType != null && d.ClientType.IsDevice, d.IgnoreOffline, d.IsStatusTracked))
                 .ToListAsync(ct);
@@ -49,11 +50,22 @@ public sealed class SubnetsApi : IApiModule
             var used = infos.Keys.ToDictionary(k => k, _ => new HashSet<uint>());
             var reserved = infos.Keys.ToDictionary(k => k, _ => new HashSet<uint>());
 
+            // Membership is derived from IP range (same rule as /subnets/{id}/ips), not Device.SubnetId.
+            var clients = new Dictionary<int, int>();
+            var devs = new Dictionary<int, int>();
+            var offline = new Dictionary<int, int>();
             foreach (var d in devices)
             {
-                if (d.SubnetId is null || !infos.TryGetValue(d.SubnetId.Value, out var info)) continue;
-                if (!TryIp(d.IpAddress, out var u) || u < info.NetworkUInt || u > info.BroadcastUInt) continue;
-                used[d.SubnetId.Value].Add(u);
+                if (!TryIp(d.IpAddress, out var u)) continue;
+                foreach (var (sid, info) in infos)
+                {
+                    if (u < info.NetworkUInt || u > info.BroadcastUInt) continue;
+                    used[sid].Add(u);
+                    var bucket = d.IsDevice ? devs : clients;
+                    bucket[sid] = bucket.GetValueOrDefault(sid) + 1;
+                    if (d.IsStatusTracked && !d.IsOnline && !d.IgnoreOffline)
+                        offline[sid] = offline.GetValueOrDefault(sid) + 1;
+                }
             }
 
             foreach (var a in assignments)
@@ -62,13 +74,6 @@ public sealed class SubnetsApi : IApiModule
                 if (!TryIp(a.IpAddress, out var u) || u < info.NetworkUInt || u > info.BroadcastUInt) continue;
                 reserved[a.SubnetId].Add(u);
             }
-
-            var clients = devices.Where(d => d.SubnetId != null && !d.IsDevice)
-                .GroupBy(d => d.SubnetId!.Value).ToDictionary(g => g.Key, g => g.Count());
-            var devs = devices.Where(d => d.SubnetId != null && d.IsDevice)
-                .GroupBy(d => d.SubnetId!.Value).ToDictionary(g => g.Key, g => g.Count());
-            var offline = devices.Where(d => d.SubnetId != null && d.IsStatusTracked && !d.IsOnline && !d.IgnoreOffline)
-                .GroupBy(d => d.SubnetId!.Value).ToDictionary(g => g.Key, g => g.Count());
 
             var items = subnets.Select(s =>
             {
@@ -137,20 +142,23 @@ public sealed class SubnetsApi : IApiModule
 
         api.MapPost("/subnets", async (SubnetInput input, AppDbContext db, CancellationToken ct) =>
         {
-            var (entity, error) = Normalize(input, new Subnet());
+            var entity = new Subnet();
+            var error = await NormalizeAsync(input, entity, null, db, ct);
             if (error is not null) return Results.BadRequest(new { error });
-            db.Subnets.Add(entity!);
-            await db.SaveChangesAsync(ct);
-            return Results.Ok(entity!.ToDto());
+            db.Subnets.Add(entity);
+            if (await TrySaveAsync(db, ct) is { } conflict) return conflict;
+            await ResyncDeviceSubnetsAsync(db, ct);
+            return Results.Ok(entity.ToDto());
         }).RequireAuthorization("CanEdit");
 
         api.MapPut("/subnets/{id:int}", async (int id, SubnetInput input, AppDbContext db, CancellationToken ct) =>
         {
             var entity = await db.Subnets.FirstOrDefaultAsync(x => x.Id == id, ct);
             if (entity is null) return Results.NotFound(new { error = "Subnet not found." });
-            var (_, error) = Normalize(input, entity);
+            var error = await NormalizeAsync(input, entity, id, db, ct);
             if (error is not null) return Results.BadRequest(new { error });
-            await db.SaveChangesAsync(ct);
+            if (await TrySaveAsync(db, ct) is { } conflict) return conflict;
+            await ResyncDeviceSubnetsAsync(db, ct);
             return Results.Ok(entity.ToDto());
         }).RequireAuthorization("CanEdit");
 
@@ -160,6 +168,7 @@ public sealed class SubnetsApi : IApiModule
             if (entity is null) return Results.Ok(new { ok = true });
             db.Subnets.Remove(entity);
             await db.SaveChangesAsync(ct);
+            await ResyncDeviceSubnetsAsync(db, ct);
             return Results.Ok(new { ok = true });
         }).RequireAuthorization("CanEdit");
 
@@ -290,6 +299,8 @@ public sealed class SubnetsApi : IApiModule
             if (!IpCidr.TryParseIPv4Cidr(sub.Cidr ?? "", out var subInfo, out _)
                 || ipU < subInfo.NetworkUInt || ipU > subInfo.BroadcastUInt)
                 return Results.BadRequest(new { error = "IP address is outside this subnet." });
+            if (subInfo.PrefixLength < 31 && (ipU == subInfo.NetworkUInt || ipU == subInfo.BroadcastUInt))
+                return Results.BadRequest(new { error = "The network and broadcast addresses cannot be reserved." });
             if ((input.Notes ?? "").Trim().Length > 500)
                 return Results.BadRequest(new { error = "Notes must be 500 characters or fewer." });
 
@@ -346,35 +357,93 @@ public sealed class SubnetsApi : IApiModule
 
     // ---------- helpers ----------
 
-    private static (Subnet? entity, string? error) Normalize(SubnetInput input, Subnet entity)
+    private static async Task<string?> NormalizeAsync(SubnetInput input, Subnet entity, int? selfId, AppDbContext db, CancellationToken ct)
     {
         var name = (input.Name ?? "").Trim();
-        if (name.Length == 0) return (null, "Name is required.");
+        if (name.Length == 0) return "Name is required.";
+        if (name.Length > 200) return "Name must be 200 characters or fewer.";
 
-        var cidr = (input.Cidr ?? "").Trim();
-        if (cidr.Length == 0) return (null, "CIDR is required.");
-        if (!IpCidr.TryParseIPv4Cidr(cidr, out _, out var cidrError))
-            return (null, string.IsNullOrWhiteSpace(cidrError) ? "Invalid CIDR." : cidrError);
+        var cidrText = (input.Cidr ?? "").Trim();
+        if (cidrText.Length == 0) return "CIDR is required.";
+        if (!IpCidr.TryParseIPv4Cidr(cidrText, out var info, out var cidrError))
+            return string.IsNullOrWhiteSpace(cidrError) ? "Invalid CIDR." : cidrError;
 
-        if (input.VlanId is < 1 or > 4094) return (null, "VLAN ID must be between 1 and 4094.");
+        if (input.VlanId is < 1 or > 4094) return "VLAN ID must be between 1 and 4094.";
 
-        var dhcpStart = Trim(input.DhcpRangeStart);
-        var dhcpEnd = Trim(input.DhcpRangeEnd);
-        if (dhcpStart is not null && !IpCidr.TryParseIPv4(dhcpStart, out _, out _)) return (null, "DHCP start is not a valid IPv4 address.");
-        if (dhcpEnd is not null && !IpCidr.TryParseIPv4(dhcpEnd, out _, out _)) return (null, "DHCP end is not a valid IPv4 address.");
+        var description = Blank(input.Description);
+        if (description is { Length: > 2000 }) return "Description must be 2000 characters or fewer.";
+
+        var dhcpStart = Blank(input.DhcpRangeStart);
+        var dhcpEnd = Blank(input.DhcpRangeEnd);
+        if ((dhcpStart is null) != (dhcpEnd is null)) return "Set both DHCP start and DHCP end, or neither.";
+        if (dhcpStart is not null && dhcpEnd is not null)
+        {
+            if (!IpCidr.TryParseIPv4(dhcpStart, out var ds, out _)) return "DHCP start is not a valid IPv4 address.";
+            if (!IpCidr.TryParseIPv4(dhcpEnd, out var de, out _)) return "DHCP end is not a valid IPv4 address.";
+            if (ds < info.NetworkUInt || ds > info.BroadcastUInt || de < info.NetworkUInt || de > info.BroadcastUInt)
+                return "DHCP range must be inside the subnet.";
+            if (ds > de) return "DHCP start must not be after DHCP end.";
+        }
+
+        var dns1 = Blank(input.Dns1);
+        var dns2 = Blank(input.Dns2);
+        if (dns1 is not null && !IpCidr.TryParseIPv4(dns1, out _, out _)) return "DNS 1 is not a valid IPv4 address.";
+        if (dns2 is not null && !IpCidr.TryParseIPv4(dns2, out _, out _)) return "DNS 2 is not a valid IPv4 address.";
+
+        // Overlap / duplicate check against all other subnets.
+        var others = await db.Subnets.AsNoTracking()
+            .Where(s => selfId == null || s.Id != selfId)
+            .Select(s => new { s.Name, s.Cidr }).ToListAsync(ct);
+        foreach (var o in others)
+        {
+            if (string.IsNullOrWhiteSpace(o.Cidr) || !IpCidr.TryParseIPv4Cidr(o.Cidr, out var oi, out _)) continue;
+            if (info.NetworkUInt <= oi.BroadcastUInt && oi.NetworkUInt <= info.BroadcastUInt)
+                return $"CIDR {info.Cidr} overlaps subnet \"{o.Name}\" ({oi.Cidr}).";
+        }
 
         entity.Name = name;
-        entity.Cidr = cidr;
+        entity.Cidr = info.Cidr; // canonical network/prefix
         entity.DhcpRangeStart = dhcpStart;
         entity.DhcpRangeEnd = dhcpEnd;
-        entity.Dns1 = Trim(input.Dns1);
-        entity.Dns2 = Trim(input.Dns2);
+        entity.Dns1 = dns1;
+        entity.Dns2 = dns2;
         entity.VlanId = input.VlanId;
-        entity.Description = Trim(input.Description);
-        return (entity, null);
+        entity.Description = description;
+        return null;
     }
 
-    private static string? Trim(string? s) => s?.Trim();
+    private static string? Blank(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+
+    private static async Task<IResult?> TrySaveAsync(AppDbContext db, CancellationToken ct)
+    {
+        try { await db.SaveChangesAsync(ct); return null; }
+        catch (DbUpdateException)
+        {
+            return Results.Conflict(new { error = "A subnet with that CIDR already exists." });
+        }
+    }
+
+    /// <summary>Re-derives Device.SubnetId from IP range membership after subnets change.</summary>
+    private static async Task ResyncDeviceSubnetsAsync(AppDbContext db, CancellationToken ct)
+    {
+        db.ChangeTracker.Clear();
+        var ranges = new List<(int Id, IpCidr.CidrInfo Info)>();
+        foreach (var s in await db.Subnets.AsNoTracking().OrderBy(s => s.Id).Select(s => new { s.Id, s.Cidr }).ToListAsync(ct))
+            if (!string.IsNullOrWhiteSpace(s.Cidr) && IpCidr.TryParseIPv4Cidr(s.Cidr, out var info, out _))
+                ranges.Add((s.Id, info));
+
+        var devices = await db.Devices.Where(d => d.IpAddress != null && d.IpAddress != "" || d.SubnetId != null).ToListAsync(ct);
+        var changed = false;
+        foreach (var d in devices)
+        {
+            int? sid = null;
+            if (TryIp(d.IpAddress, out var u))
+                foreach (var (id, info) in ranges)
+                    if (u >= info.NetworkUInt && u <= info.BroadcastUInt) { sid = id; break; }
+            if (d.SubnetId != sid) { d.SubnetId = sid; changed = true; }
+        }
+        if (changed) await db.SaveChangesAsync(ct);
+    }
 
     private static string? Utc(DateTime? dt)
         => dt is null ? null : DateTime.SpecifyKind(dt.Value, DateTimeKind.Utc).ToString("o");

@@ -180,13 +180,16 @@ public sealed class DevicesApi : IApiModule
             var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrWhiteSpace(userId)) return Results.BadRequest(new { error = "No user." });
 
+            if ((req.Columns ?? new()).Any(c => c.Key is not null && (c.Key.Trim().Length > 64 || c.Key.Any(char.IsControl))))
+                return Results.BadRequest(new { error = "Column key is invalid or too long (max 64)." });
+
             var existing = await db.UserColumnPreferences
                 .Where(p => p.UserId == userId && p.PageKey == pageKey)
                 .ToListAsync(ct);
             if (existing.Count > 0) db.UserColumnPreferences.RemoveRange(existing);
 
             var now = DateTime.UtcNow;
-            foreach (var c in (req.Columns ?? new()).Where(c => !string.IsNullOrWhiteSpace(c.Key)).DistinctBy(c => c.Key))
+            foreach (var c in (req.Columns ?? new()).Where(c => !string.IsNullOrWhiteSpace(c.Key)).DistinctBy(c => c.Key.Trim()))
             {
                 db.UserColumnPreferences.Add(new UserColumnPreference
                 {
@@ -315,6 +318,26 @@ public sealed class DevicesApi : IApiModule
         if (string.IsNullOrWhiteSpace(name)) return Invalid("name", "Name is required.");
         if (name.Length > 200) return Invalid("name", "Name is too long (max 200).");
 
+        // Text field validation: no control characters (NUL etc.), bounded lengths (match column sizes)
+        var textChecks = new (string Field, string? Value, int Max, bool Multiline)[]
+        {
+            ("name", name, 200, false), ("hostname", i.Hostname, 255, false), ("ipAddress", i.IpAddress, 64, false),
+            ("macAddress", i.MacAddress, 32, false), ("assetNumber", i.AssetNumber, 200, false),
+            ("manufacturer", i.Manufacturer, 200, false), ("model", i.Model, 200, false),
+            ("operatingSystem", i.OperatingSystem, 200, false), ("source", i.Source, 64, false),
+            ("usedNew", i.UsedNew, 64, false), ("sourceDate", i.SourceDate, 32, false),
+            ("proxmoxNodeIdentifier", i.ProxmoxNodeIdentifier, 128, false),
+            ("monitorHttpPath", i.MonitorHttpPath, 512, false), ("accessLink", i.AccessLink, 2048, false),
+            ("description", i.Description, 2000, true),
+        };
+        foreach (var (field, value, max, multiline) in textChecks)
+        {
+            if (string.IsNullOrEmpty(value)) continue;
+            if (value.Trim().Length > max) return Invalid(field, $"Too long (max {max}).");
+            if (value.Any(c => char.IsControl(c) && !(multiline && (c == '\n' || c == '\r' || c == '\t'))))
+                return Invalid(field, "Contains invalid control characters.");
+        }
+
         var devicesOnly = string.Equals(i.Kind, "device", StringComparison.OrdinalIgnoreCase);
 
         // Client type
@@ -382,6 +405,23 @@ public sealed class DevicesApi : IApiModule
         var manualUp = i.IsTopologyRoot ? null : i.ManualUpstreamDeviceId;
         if (!isNew && manualUp == d.Id) manualUp = null;
         if (manualUp is not null && !await db.Devices.AnyAsync(x => x.Id == manualUp, ct)) manualUp = null;
+
+        // Reject ancestor cycles (same precedence as /topology: host, then manual upstream)
+        if (!i.IsTopologyRoot && (hostId ?? manualUp) is int firstParent && !isNew)
+        {
+            var links = await db.Devices.AsNoTracking()
+                .Select(x => new { x.Id, x.HostDeviceId, x.ManualUpstreamDeviceId, x.IsTopologyRoot })
+                .ToDictionaryAsync(x => x.Id, ct);
+            var seen = new HashSet<int>();
+            int? cur = firstParent;
+            while (cur is int c && seen.Add(c))
+            {
+                if (c == d.Id)
+                    return Invalid(hostId is not null ? "hostDeviceId" : "manualUpstreamDeviceId",
+                        "That would create a loop (the device would be upstream of itself).");
+                cur = links.TryGetValue(c, out var l) && !l.IsTopologyRoot ? l.HostDeviceId ?? l.ManualUpstreamDeviceId : null;
+            }
+        }
 
         // Location text is denormalised from the location row
         string? locationText = null;

@@ -14,6 +14,7 @@ public sealed class UsersApi : IApiModule
     public sealed record ChangePasswordRequest(string? CurrentPassword, string? NewPassword);
 
     private const string Admin = "Admin";
+    private const int MaxUsernameLength = 256;
 
     private static string Errors(IdentityResult r) => string.Join(" | ", r.Errors.Select(e => e.Description));
 
@@ -32,6 +33,7 @@ public sealed class UsersApi : IApiModule
 
             var username = (req.Username ?? "").Trim();
             if (username.Length == 0) return Bad("Username is required.");
+            if (username.Length > MaxUsernameLength) return Bad($"Username is too long (maximum {MaxUsernameLength} characters).");
             if (string.IsNullOrWhiteSpace(req.Password)) return Bad("Password is required.");
             if (!string.Equals(req.Password, req.ConfirmPassword, StringComparison.Ordinal)) return Bad("Passwords do not match.");
 
@@ -66,6 +68,7 @@ public sealed class UsersApi : IApiModule
             var username = (req.Username ?? "").Trim();
             if (username.Length == 0) return Bad("Username is required.");
             if (string.IsNullOrEmpty(req.Password)) return Bad("Password is required.");
+            if (username.Length > MaxUsernameLength) return Bad($"Username is too long (maximum {MaxUsernameLength} characters).");
             var role = string.IsNullOrWhiteSpace(req.Role) ? null : req.Role.Trim();
             if (role != null && !await roleMgr.RoleExistsAsync(role)) return Bad($"Role '{role}' does not exist.");
             if (await users.FindByNameAsync(username) != null) return Bad($"Username '{username}' is already taken.");
@@ -81,12 +84,14 @@ public sealed class UsersApi : IApiModule
             return Results.Ok(new { id = u.Id });
         }).RequireAuthorization("AdminOnly");
 
-        api.MapPut("/users/{id}/roles", async (string id, RolesRequest req, UserManager<ApplicationUser> users, RoleManager<IdentityRole> roleMgr) =>
+        api.MapPut("/users/{id}/roles", async (string id, RolesRequest req, UserManager<ApplicationUser> users, RoleManager<IdentityRole> roleMgr, SignInManager<ApplicationUser> signIn, HttpContext http) =>
         {
             var user = await users.FindByIdAsync(id);
             if (user is null) return Results.NotFound(new { error = "User not found." });
 
-            var selected = new HashSet<string>(req.Roles ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+            var requested = req.Roles ?? Array.Empty<string>();
+            if (requested.Any(r => string.IsNullOrWhiteSpace(r))) return Bad("Role names must not be empty.");
+            var selected = new HashSet<string>(requested.Select(r => r.Trim()), StringComparer.OrdinalIgnoreCase);
             foreach (var r in selected)
                 if (!await roleMgr.RoleExistsAsync(r)) return Bad($"Role '{r}' does not exist.");
 
@@ -107,10 +112,16 @@ public sealed class UsersApi : IApiModule
                 var ar = await users.AddToRolesAsync(user, toAdd);
                 if (!ar.Succeeded) return Bad(Errors(ar));
             }
+            if (toRemove.Count > 0 || toAdd.Count > 0)
+            {
+                await users.UpdateSecurityStampAsync(user);
+                if (user.Id == http.User.FindFirstValue(ClaimTypes.NameIdentifier))
+                    await signIn.RefreshSignInAsync(user);
+            }
             return Results.Ok(new { ok = true });
         }).RequireAuthorization("AdminOnly");
 
-        api.MapPost("/users/{id}/reset-password", async (string id, ResetPasswordRequest req, UserManager<ApplicationUser> users) =>
+        api.MapPost("/users/{id}/reset-password", async (string id, ResetPasswordRequest req, UserManager<ApplicationUser> users, SignInManager<ApplicationUser> signIn, HttpContext http) =>
         {
             var user = await users.FindByIdAsync(id);
             if (user is null) return Results.NotFound(new { error = "User not found." });
@@ -118,7 +129,11 @@ public sealed class UsersApi : IApiModule
 
             var token = await users.GeneratePasswordResetTokenAsync(user);
             var res = await users.ResetPasswordAsync(user, token, req.NewPassword);
-            return res.Succeeded ? Results.Ok(new { ok = true }) : Bad(Errors(res));
+            if (!res.Succeeded) return Bad(Errors(res));
+            // ResetPasswordAsync rotates the stamp, invalidating the user's other sessions.
+            if (user.Id == http.User.FindFirstValue(ClaimTypes.NameIdentifier))
+                await signIn.RefreshSignInAsync(user);
+            return Results.Ok(new { ok = true });
         }).RequireAuthorization("AdminOnly");
 
         api.MapDelete("/users/{id}", async (string id, UserManager<ApplicationUser> users, HttpContext http) =>
