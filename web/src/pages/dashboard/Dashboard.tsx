@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { api, type SubnetRow } from '../api';
-import { PageHeader, Stat, Empty } from '../components/ui';
+import { dashboardApi, type SubnetRow } from './api';
+import { PageHeader, Stat, Empty } from '../../components/ui';
 
 function Usage({ s }: { s: SubnetRow }) {
   const pct = s.usable > 0 ? Math.min(100, Math.round((s.used / s.usable) * 100)) : 0;
@@ -14,7 +14,7 @@ function Usage({ s }: { s: SubnetRow }) {
 }
 
 export default function Dashboard() {
-  const { data, isLoading, error, refetch, isFetching } = useQuery({ queryKey: ['summary'], queryFn: api.summary, refetchInterval: 30_000 });
+  const { data, isLoading, error, refetch, isFetching } = useQuery({ queryKey: ['summary'], queryFn: dashboardApi.summary, refetchInterval: 30_000 });
 
   return (
     <>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { api, type DeviceRow } from '../api';
-import { PageHeader, Empty } from '../components/ui';
+import { devicesApi, type DeviceRow } from './api';
+import { PageHeader, Empty } from '../../components/ui';
 
 type Status = 'all' | 'online' | 'offline';
 
@@ -23,7 +23,7 @@ export default function Devices({ kind, title }: { kind: 'device' | 'client'; ti
   const [q, setQ] = useState('');
   const [status, setStatus] = useState<Status>('all');
   const dq = useDebounced(q);
-  const { data, isLoading, error } = useQuery({ queryKey: ['devices', kind, dq], queryFn: () => api.devices(kind, dq) });
+  const { data, isLoading, error } = useQuery({ queryKey: ['devices', kind, dq], queryFn: () => devicesApi.list(kind, dq) });
 
   const rows = (data ?? []).filter((d) => status === 'all' || (status === 'online' ? d.isOnline : !d.isOnline));
 

@@ -1,12 +1,12 @@
 import { NavLink } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { api, type Me } from '../api';
+import { authApi, type Me } from '../auth';
+import { allNav, type NavEntry } from '../registry';
 
-// `to` = page already ported to React. `href` = still served by the legacy Blazor UI.
-const NAV: { label: string; to?: string; href?: string; group: string }[] = [
-  { group: 'Overview', label: 'Dashboard', to: '/' },
-  { group: 'Inventory', label: 'Devices', to: '/devices' },
-  { group: 'Inventory', label: 'Clients', to: '/clients' },
+const GROUPS: NavEntry['group'][] = ['Overview', 'Inventory', 'Operations', 'System'];
+
+// Classic Blazor pages. A link is hidden as soon as a React module declares `replaces` for it.
+const CLASSIC: { label: string; href: string; group: NavEntry['group'] }[] = [
   { group: 'Inventory', label: 'Subnets', href: '/subnets' },
   { group: 'Inventory', label: 'Hosts & Guests', href: '/hosts' },
   { group: 'Inventory', label: 'Racks', href: '/racks/view' },
@@ -19,12 +19,17 @@ const NAV: { label: string; to?: string; href?: string; group: string }[] = [
   { group: 'System', label: 'About', href: '/about' },
 ];
 
+const norm = (p: string) => p.replace(/\/+$/, '').toLowerCase();
+
 export default function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
   const qc = useQueryClient();
-  const groups = [...new Set(NAV.map((n) => n.group))];
+  const replaced = new Set(allNav.map((n) => n.replaces).filter(Boolean).map((p) => norm(p!)));
+  const isAdmin = me.roles.includes('Admin');
+  const canEdit = isAdmin || me.roles.includes('Editor');
+  const visible = (n: NavEntry) => !n.roles || (n.roles.includes('Admin') && isAdmin) || (n.roles.includes('Editor') && canEdit);
 
   const logout = async () => {
-    await api.logout();
+    await authApi.logout();
     qc.clear();
     window.location.assign('/app/');
   };
@@ -37,23 +42,26 @@ export default function Shell({ me, children }: { me: Me; children: React.ReactN
           <span>Netipam</span>
         </div>
         <nav>
-          {groups.map((g) => (
-            <div key={g} className="nav-group">
-              <div className="nav-heading">{g}</div>
-              {NAV.filter((n) => n.group === g).map((n) =>
-                n.to ? (
-                  <NavLink key={n.label} to={n.to} end={n.to === '/'} className={({ isActive }) => 'nav-item' + (isActive ? ' active' : '')}>
+          {GROUPS.map((g) => {
+            const react = allNav.filter((n) => n.group === g && visible(n)).sort((a, b) => a.order - b.order);
+            const classic = CLASSIC.filter((c) => c.group === g && !replaced.has(norm(c.href)));
+            if (!react.length && !classic.length) return null;
+            return (
+              <div key={g} className="nav-group">
+                <div className="nav-heading">{g}</div>
+                {react.map((n) => (
+                  <NavLink key={n.to} to={n.to} end={n.to === '/'} className={({ isActive }) => 'nav-item' + (isActive ? ' active' : '')}>
                     {n.label}
                   </NavLink>
-                ) : (
-                  <a key={n.label} href={n.href} className="nav-item legacy" title="Opens the classic page">
-                    {n.label}
-                    <span className="legacy-tag">classic</span>
+                ))}
+                {classic.map((c) => (
+                  <a key={c.href} href={c.href} className="nav-item legacy" title="Opens the classic page">
+                    {c.label}<span className="legacy-tag">classic</span>
                   </a>
-                ),
-              )}
-            </div>
-          ))}
+                ))}
+              </div>
+            );
+          })}
         </nav>
         <div className="sidebar-foot">
           <div className="who">

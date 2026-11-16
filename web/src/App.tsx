@@ -1,13 +1,12 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { api } from './api';
+import { useMe } from './auth';
+import { allRoutes } from './registry';
 import Shell from './components/Shell';
 import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import Devices from './pages/Devices';
+import { Spinner } from './components/kit';
 
 export default function App() {
-  const me = useQuery({ queryKey: ['me'], queryFn: api.me });
+  const me = useMe();
 
   if (me.isLoading) return <div className="splash">Loading…</div>;
   if (!me.data?.authenticated) {
@@ -21,10 +20,8 @@ export default function App() {
   return (
     <Shell me={me.data}>
       <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/devices" element={<Devices kind="device" title="Devices" />} />
-        <Route path="/clients" element={<Devices kind="client" title="Clients" />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        {allRoutes.map((r) => <Route key={r.path} path={r.path} element={r.element} />)}
+        <Route path="*" element={allRoutes.length ? <Navigate to="/" replace /> : <Spinner />} />
       </Routes>
     </Shell>
   );

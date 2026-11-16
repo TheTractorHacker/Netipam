@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { api } from '../api';
+import { authApi } from '../auth';
 
 export default function Login() {
   const qc = useQueryClient();
@@ -15,7 +15,7 @@ export default function Login() {
     setBusy(true);
     setError(null);
     try {
-      await api.login(username, password, remember);
+      await authApi.login(username, password, remember);
       await qc.invalidateQueries({ queryKey: ['me'] });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign in failed.');
