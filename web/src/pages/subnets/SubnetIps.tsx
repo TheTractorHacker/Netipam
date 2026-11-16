@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { subnetsApi, type IpBlock, type IpDevice, type IpRow, type IpStatus } from './api';
@@ -42,23 +42,114 @@ function blockStyle(b: IpBlock): React.CSSProperties {
   return { background: `color-mix(in srgb, ${base} ${pct}%, var(--panel-2))` };
 }
 
-function BlockMap({ blocks, onPick }: { blocks: IpBlock[]; onPick: (cidr: string) => void }) {
+const MAX_BLOCKS = 32;
+function ipInt(ip: string): number | null {
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip.trim());
+  if (!m) return null;
+  const o = m.slice(1).map(Number);
+  if (o.some((n) => n > 255)) return null;
+  return ((o[0] * 256 + o[1]) * 256 + o[2]) * 256 + o[3];
+}
+function cidrRange(cidr: string): [number, number] | null {
+  const [ip, p] = cidr.split('/');
+  const n = ipInt(ip);
+  const pre = Number(p);
+  if (n === null || !Number.isInteger(pre) || pre < 0 || pre > 32) return null;
+  const size = 2 ** (32 - pre);
+  const start = Math.floor(n / size) * size;
+  return [start, start + size - 1];
+}
+const byIp = (a: string, b: string) => (ipInt(a.split('/')[0]) ?? 0) - (ipInt(b.split('/')[0]) ?? 0);
+const parseBlockParam = (v: string | null) => (v ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+
+/** Resolve typed tokens ("0,1", "5-8", "192.168.1.0", CIDR) to block CIDRs; unmatched tokens are returned. */
+function resolveTokens(text: string, blocks: IpBlock[]) {
+  const found: string[] = [];
+  const bad: string[] = [];
+  const ranges = blocks.map((b) => ({ cidr: b.cidr, r: cidrRange(b.cidr) }));
+  for (const tok of text.split(',').map((t) => t.trim()).filter(Boolean)) {
+    let hit: string[] = [];
+    const rng = /^(\d{1,3})(?:\s*-\s*(\d{1,3}))?$/.exec(tok);
+    if (rng) {
+      const lo = Number(rng[1]);
+      const hi = rng[2] !== undefined ? Number(rng[2]) : lo;
+      hit = blocks.filter((b) => { const o = Number(thirdOctet(b.cidr)); return o >= Math.min(lo, hi) && o <= Math.max(lo, hi); }).map((b) => b.cidr);
+    } else {
+      const r = cidrRange(tok.includes('/') ? tok : `${tok}/32`);
+      if (r) hit = ranges.filter((x) => x.r && x.r[0] <= r[0] && r[0] <= x.r[1]).map((x) => x.cidr);
+    }
+    if (hit.length) found.push(...hit); else bad.push(tok);
+  }
+  return { found, bad };
+}
+
+function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <span className="chip subnets-chip">
+      <span className="mono">{label}</span>
+      <button type="button" className="subnets-chip-x" aria-label={`Remove ${label}`} onClick={onRemove}>×</button>
+    </span>
+  );
+}
+
+function BlockMap({ blocks, selected, onToggle, onSet, onView }: {
+  blocks: IpBlock[]; selected: string[]; onToggle: (cidr: string) => void; onSet: (c: string[]) => void; onView: () => void;
+}) {
+  const [text, setText] = useState('');
+  const [bad, setBad] = useState<string[]>([]);
+  const sel = new Set(selected);
+  const apply = () => {
+    if (!text.trim()) { setBad([]); return; }
+    const { found, bad: nb } = resolveTokens(text, blocks);
+    setBad(nb);
+    if (found.length) {
+      const all = Array.from(new Set([...selected, ...found])).sort(byIp);
+      onSet(all.slice(0, MAX_BLOCKS));
+    }
+    setText(nb.join(', '));
+  };
   return (
     <div className="card">
       <div className="subnets-legend">
         <span><i className="subnets-sw blk-lo" />Mostly free</span>
         <span><i className="subnets-sw blk-hi" />Heavily used</span>
         <span><i className="subnets-sw blk-off" />Has offline devices</span>
-        <span className="muted">Click a block to see its IPs</span>
+        <span className="muted">Click blocks to select, then view their IPs together</span>
+      </div>
+      <div className="subnets-selbar" role="region" aria-label="Block selection">
+        <div className="subnets-selbar-top">
+          <strong className="num" aria-live="polite">{selected.length} {selected.length === 1 ? 'block' : 'blocks'} selected</strong>
+          <button type="button" className="btn sm primary" disabled={selected.length === 0} onClick={onView}>View selected IPs</button>
+          <button type="button" className="btn sm" onClick={() => onSet(blocks.filter((b) => b.used > 0).slice(0, MAX_BLOCKS).map((b) => b.cidr))}>Select all with devices</button>
+          <button type="button" className="btn sm" disabled={selected.length === 0} onClick={() => { onSet([]); setBad([]); setText(''); }}>Clear</button>
+        </div>
+        {selected.length > 0 && (
+          <div className="subnets-chips">
+            {selected.map((c) => <Chip key={c} label={c} onRemove={() => onToggle(c)} />)}
+          </div>
+        )}
+        <div className="field subnets-selinput">
+          <input className="search" aria-label="Select blocks" placeholder="0,1 or 5-8 or 192.168.1.0" value={text}
+            aria-invalid={bad.length > 0}
+            onChange={(e) => setText(e.target.value)} onBlur={apply}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); apply(); } }} />
+          {bad.length > 0 && <span className="field-error" role="alert">No block matches: {bad.join(', ')}</span>}
+        </div>
+        {selected.length >= MAX_BLOCKS && <div className="muted small">Maximum of {MAX_BLOCKS} blocks.</div>}
       </div>
       <div className="subnets-blocks">
-        {blocks.map((b) => (
-          <button key={b.cidr} type="button" className="subnets-block" style={blockStyle(b)}
-            title={blockTitle(b)} aria-label={blockTitle(b)} onClick={() => onPick(b.cidr)}>
-            <span className="blk-name">{blockLabel(b)}</span>
-            <span className="blk-used num">{b.used}</span>
-          </button>
-        ))}
+        {blocks.map((b) => {
+          const on = sel.has(b.cidr);
+          return (
+            <button key={b.cidr} type="button" className={`subnets-block${on ? ' selected' : ''}`} style={blockStyle(b)}
+              title={blockTitle(b)} aria-label={blockTitle(b)} aria-pressed={on}
+              disabled={!on && selected.length >= MAX_BLOCKS} onClick={() => onToggle(b.cidr)}>
+              {on && <span className="blk-check" aria-hidden="true">✓</span>}
+              <span className="blk-name">{blockLabel(b)}</span>
+              <span className="blk-used num">{b.used}</span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -195,6 +286,8 @@ export default function SubnetIpsPage() {
   const { edit, admin } = useCan();
   const [params, setParams] = useSearchParams();
   const block = params.get('block') || undefined;
+  const [picked, setPicked] = useState<string[]>(() => parseBlockParam(params.get('block')).sort(byIp));
+  useEffect(() => { setPicked(parseBlockParam(block ?? null).sort(byIp)); }, [block]);
   const [q, setQ] = useState('');
   const dq = useDebounced(q, 150);
   const [view, setView] = useState<ViewMode>('all');
@@ -248,8 +341,31 @@ export default function SubnetIpsPage() {
   const { subnet, options } = data;
   const blocks = data.blocks ?? [];
   const showBlocks = !!data.large && !block;
-  const blockIdx = block ? blocks.findIndex((b) => b.cidr === (data.block ?? block)) : -1;
-  const goBlock = (cidr: string | null) => setParams(cidr ? { block: cidr } : {});
+  const shown = (data.selectedBlocks?.length ? data.selectedBlocks : parseBlockParam(block ?? null)).slice().sort(byIp);
+  const single = shown.length === 1 ? shown[0] : null;
+  const blockIdx = single ? blocks.findIndex((b) => b.cidr === single) : -1;
+  const goBlocks = (list: string[]) => setParams(list.length ? { block: list.join(',') } : {});
+  const goBlock = (cidr: string | null) => goBlocks(cidr ? [cidr] : []);
+  const toggle = (cidr: string) => setPicked((p) => (p.includes(cidr)
+    ? p.filter((c) => c !== cidr)
+    : p.length >= MAX_BLOCKS ? p : [...p, cidr].sort(byIp)));
+  const groups = (() => {
+    if (shown.length < 2) return null;
+    const rs = shown.map((c) => ({ cidr: c, r: cidrRange(c), rows: [] as IpRow[] }));
+    for (const row of rows) {
+      const n = ipInt(row.ip);
+      const g = rs.find((x) => x.r && n !== null && n >= x.r[0] && n <= x.r[1]);
+      if (g) g.rows.push(row);
+    }
+    return rs.filter((g) => g.rows.length);
+  })();
+  const renderCell = (r: IpRow) => (
+    <button
+      key={r.ip} type="button" title={mapTitle(r)} aria-label={mapTitle(r)}
+      className={`subnets-cell ${cellClass(r)}${visible.has(r.ip) ? '' : ' dim'}`}
+      onClick={() => setSel(r.ip)}
+    >{lastOctet(r.ip)}</button>
+  );
   const used = rows.filter((r) => r.isUsed).length;
   const pct = rows.length ? (used * 100) / rows.length : 0;
   const selRow = sel ? rows.find((r) => r.ip === sel) ?? null : null;
@@ -281,7 +397,7 @@ export default function SubnetIpsPage() {
             <Stat label="Free" value={blocks.reduce((a, b) => a + b.free, 0)} />
             <Stat label="Offline" value={blocks.reduce((a, b) => a + b.offline, 0)} tone="bad" />
           </div>
-          <BlockMap blocks={blocks} onPick={goBlock} />
+          <BlockMap blocks={blocks} selected={picked} onToggle={toggle} onSet={setPicked} onView={() => goBlocks(picked)} />
         </>
       ) : rows.length === 0 ? (
         <Empty>No usable IPs for this subnet.</Empty>
@@ -290,14 +406,18 @@ export default function SubnetIpsPage() {
           {block && (
             <div className="subnets-crumb">
               <button type="button" className="btn sm" onClick={() => goBlock(null)}>← All blocks</button>
-              <span className="chip">Block {data.block ?? block} of {subnet.cidr}</span>
-              {admin && <Link className="btn sm" to={`/scan?subnet=${subnet.id}&block=${encodeURIComponent(data.block ?? block)}`}>Scan this block</Link>}
-              <span className="subnets-crumb-nav">
-                <button type="button" className="btn sm" aria-label="Previous block" disabled={blockIdx <= 0}
-                  onClick={() => goBlock(blocks[blockIdx - 1].cidr)}>‹ Prev</button>
-                <button type="button" className="btn sm" aria-label="Next block" disabled={blockIdx < 0 || blockIdx >= blocks.length - 1}
-                  onClick={() => goBlock(blocks[blockIdx + 1].cidr)}>Next ›</button>
-              </span>
+              {shown.map((c) => (
+                <Chip key={c} label={c} onRemove={() => goBlocks(shown.filter((x) => x !== c))} />
+              ))}
+              {single && admin && <Link className="btn sm" to={`/scan?subnet=${subnet.id}&block=${encodeURIComponent(single)}`}>Scan this block</Link>}
+              {single && (
+                <span className="subnets-crumb-nav">
+                  <button type="button" className="btn sm" aria-label="Previous block" disabled={blockIdx <= 0}
+                    onClick={() => goBlock(blocks[blockIdx - 1].cidr)}>‹ Prev</button>
+                  <button type="button" className="btn sm" aria-label="Next block" disabled={blockIdx < 0 || blockIdx >= blocks.length - 1}
+                    onClick={() => goBlock(blocks[blockIdx + 1].cidr)}>Next ›</button>
+                </span>
+              )}
             </div>
           )}
           <div className="stats">
@@ -336,15 +456,21 @@ export default function SubnetIpsPage() {
                   This subnet has {rows.length.toLocaleString()} addresses; the map is limited to {MAP_MAX.toLocaleString()}. Use the table view or narrow with search.
                 </div>
               ) : (
-                <div className="subnets-map">
-                  {rows.map((r) => (
-                    <button
-                      key={r.ip} type="button" title={mapTitle(r)} aria-label={mapTitle(r)}
-                      className={`subnets-cell ${cellClass(r)}${visible.has(r.ip) ? '' : ' dim'}`}
-                      onClick={() => setSel(r.ip)}
-                    >{lastOctet(r.ip)}</button>
-                  ))}
-                </div>
+                groups ? (
+                  <div className="subnets-groups">
+                    {groups.map((g) => {
+                      const u = g.rows.filter((r) => r.isUsed).length;
+                      return (
+                        <section key={g.cidr}>
+                          <h3 className="subnets-grouphead">{g.cidr} - {u} used, {g.rows.length - u} free</h3>
+                          <div className="subnets-map">{g.rows.map(renderCell)}</div>
+                        </section>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="subnets-map">{rows.map(renderCell)}</div>
+                )
               )}
             </div>
           ) : filtered.length === 0 ? (

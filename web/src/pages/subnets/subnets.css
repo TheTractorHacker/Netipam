@@ -67,3 +67,23 @@
 .subnets-crumb .chip { padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); font-size: 12px; }
 .subnets-crumb-nav { display: inline-flex; gap: 6px; margin-left: auto; }
 @media (max-width: 560px) { .subnets-crumb-nav { margin-left: 0; } .subnets-blocks { grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); } }
+
+/* Multi-block selection */
+.subnets-block { position: relative; }
+.subnets-block.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.subnets-block:disabled { opacity: .45; cursor: not-allowed; }
+.subnets-block .blk-check { position: absolute; top: 2px; right: 4px; font-size: 11px; font-weight: 700; color: var(--accent); }
+.subnets-selbar { position: sticky; top: 0; z-index: 5; display: grid; gap: 8px; padding: 10px 12px; margin-bottom: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.subnets-selbar-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.subnets-selbar-top strong { margin-right: 4px; }
+.subnets-chips { display: flex; flex-wrap: wrap; gap: 6px; max-height: 96px; overflow-y: auto; }
+.subnets-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); font-size: 12px; }
+.subnets-chip-x { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 15px; line-height: 1; width: 22px; height: 22px; border-radius: 50%; cursor: pointer; }
+.subnets-chip-x:hover { color: var(--text); background: var(--line); }
+.subnets-chip-x:focus-visible { outline: 2px solid var(--accent); }
+.subnets-selinput { display: grid; gap: 4px; max-width: 360px; }
+.subnets-selinput .search { width: 100%; box-sizing: border-box; }
+.subnets-groups { display: grid; gap: 14px; }
+.subnets-grouphead { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.subnets-crumb .subnets-chip { padding: 2px 4px 2px 10px; }
+@media (max-width: 560px) { .subnets-selbar { position: static; } .subnets-selinput { max-width: none; } }

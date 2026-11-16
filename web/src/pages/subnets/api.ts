@@ -40,6 +40,8 @@ export interface SubnetIps {
   blocks?: IpBlock[];
   /** The block these rows cover (large subnets only). */
   block?: string | null;
+  /** Normalised CIDRs shown in `rows` (one or more /24-ish blocks of a large subnet). */
+  selectedBlocks?: string[];
   subnet: { id: number; name: string; cidr: string; description: string | null; vlanId: number | null;
     dhcpRangeStart: string | null; dhcpRangeEnd: string | null; dns1: string | null; dns2: string | null };
   error: string | null; usableRange: string | null; rows: IpRow[];
@@ -53,6 +55,7 @@ export const subnetsApi = {
   remove: (id: number) => http.del(`/subnets/${id}`),
   cidr: (value: string) => http.get<CidrPreview>(`/subnets/cidr?value=${encodeURIComponent(value)}`),
   setFreeIpCount: (freeIpCount: number) => http.put<{ freeIpCount: number }>('/subnets/settings', { freeIpCount }),
+  /** `block` may be one CIDR or several joined with commas (large subnets only). */
   ips: (id: number, block?: string) =>
     http.get<SubnetIps>(`/subnets/${id}/ips${block ? `?block=${encodeURIComponent(block)}` : ''}`),
   saveReservation: (id: number, b: { ip: string; status: string; notes: string }) =>

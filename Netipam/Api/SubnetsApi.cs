@@ -197,19 +197,39 @@ public sealed class SubnetsApi : IApiModule
                 return Results.Ok(new { subnet = header, error, rows = Array.Empty<object>(), options = opts, usableRange = (string?)null });
 
             var large = info.UsableAddresses > MaxUsableToRender;
-            var scope = info; // the address range the rows cover
+            var selected = new List<IpCidr.CidrInfo>(); // selected blocks, sorted by IP
             var blockText = (string?)null;
+            string[]? selectedBlocks = null;
             if (!string.IsNullOrWhiteSpace(block))
             {
-                if (!IpCidr.TryParseIPv4Cidr(block.Trim(), out var binfo, out var berr))
-                    return Results.BadRequest(new { error = "Invalid block: " + (berr ?? block) });
-                if (binfo.PrefixLength < 22 || binfo.PrefixLength > 30)
-                    return Results.BadRequest(new { error = "Block must be between /22 and /30." });
-                if (binfo.NetworkUInt < info.NetworkUInt || binfo.BroadcastUInt > info.BroadcastUInt)
-                    return Results.BadRequest(new { error = "Block is not inside this subnet." });
-                scope = binfo;
-                blockText = $"{binfo.Network}/{binfo.PrefixLength}";
+                var seen = new HashSet<string>();
+                foreach (var part in block.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    if (!IpCidr.TryParseIPv4Cidr(part, out var binfo, out var berr))
+                        return Results.BadRequest(new { error = "Invalid block: " + (berr ?? part) });
+                    if (binfo.PrefixLength < 22 || binfo.PrefixLength > 30)
+                        return Results.BadRequest(new { error = "Block must be between /22 and /30." });
+                    if (binfo.NetworkUInt < info.NetworkUInt || binfo.BroadcastUInt > info.BroadcastUInt)
+                        return Results.BadRequest(new { error = "Block is not inside this subnet." });
+                    if (seen.Add($"{binfo.Network}/{binfo.PrefixLength}")) selected.Add(binfo);
+                }
+                if (selected.Count > 32)
+                    return Results.BadRequest(new { error = "At most 32 blocks can be selected." });
+                selected.Sort((x, y) => x.NetworkUInt.CompareTo(y.NetworkUInt));
+                for (var i = 1; i < selected.Count; i++)
+                    if (selected[i].NetworkUInt <= selected[i - 1].BroadcastUInt)
+                        return Results.BadRequest(new { error = $"Blocks overlap: {selected[i - 1].Network}/{selected[i - 1].PrefixLength} and {selected[i].Network}/{selected[i].PrefixLength}." });
+                if (selected.Sum(x => x.UsableAddresses) > MaxUsableToRender)
+                    return Results.BadRequest(new { error = $"Selection is too large (max {MaxUsableToRender} usable addresses)." });
+                if (selected.Count > 0)
+                {
+                    selectedBlocks = selected.Select(x => $"{x.Network}/{x.PrefixLength}").ToArray();
+                    blockText = selectedBlocks[0];
+                }
             }
+            // address span the rows cover (envelope of the selection, or the whole subnet)
+            var scopeMin = selected.Count > 0 ? selected[0].NetworkUInt : info.NetworkUInt;
+            var scopeMax = selected.Count > 0 ? selected[^1].BroadcastUInt : info.BroadcastUInt;
 
             object[]? blocks = null;
             if (large)
@@ -307,14 +327,14 @@ public sealed class SubnetsApi : IApiModule
             var resByIp = new Dictionary<uint, IpAssignment>();
             foreach (var a in reservations)
             {
-                if (!TryIp(a.IpAddress, out var u) || u < scope.NetworkUInt || u > scope.BroadcastUInt) continue;
+                if (!TryIp(a.IpAddress, out var u) || u < scopeMin || u > scopeMax) continue;
                 resByIp[u] = a;
             }
 
             var byIp = new Dictionary<uint, List<Device>>();
             foreach (var d in devicesWithIp)
             {
-                if (!TryIp(d.IpAddress, out var u) || u < scope.NetworkUInt || u > scope.BroadcastUInt) continue;
+                if (!TryIp(d.IpAddress, out var u) || u < scopeMin || u > scopeMax) continue;
                 if (!byIp.TryGetValue(u, out var list)) byIp[u] = list = new List<Device>();
                 list.Add(d);
             }
@@ -324,7 +344,8 @@ public sealed class SubnetsApi : IApiModule
                           & IpCidr.TryParseIPv4(subnet.DhcpRangeEnd ?? "", out var de, out _);
             if (hasDhcp) { dMin = Math.Min(ds, de); dMax = Math.Max(ds, de); }
 
-            var rows = GetUsableIps(scope).Select(u =>
+            var rowIps = selected.Count > 0 ? selected.SelectMany(GetUsableIps).ToList() : GetUsableIps(info);
+            var rows = rowIps.Select(u =>
             {
                 byIp.TryGetValue(u, out var devs);
                 devs ??= new List<Device>();
@@ -382,7 +403,10 @@ public sealed class SubnetsApi : IApiModule
                 };
             }).ToList();
 
-            return Results.Ok(new { subnet = header, error = (string?)null, rows, options = opts, usableRange = UsableRange(scope), large, block = blockText, blocks });
+            return Results.Ok(new { subnet = header, error = (string?)null, rows, options = opts, usableRange = selected.Count > 1
+                    ? (rowIps.Count > 0 ? $"{IpCidr.UIntToIPv4(rowIps[0])} – {IpCidr.UIntToIPv4(rowIps[^1])}" : "—")
+                    : UsableRange(selected.Count == 1 ? selected[0] : info),
+                large, block = blockText, selectedBlocks, blocks });
         });
 
         // ---------- IP reservation ----------
