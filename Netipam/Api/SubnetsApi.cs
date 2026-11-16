@@ -381,8 +381,8 @@ public sealed class SubnetsApi : IApiModule
 
     private static string? BuildHref(string? raw)
     {
-        if (DisplayFormat.TryBuildAccessLink(raw, out var href)) return href;
-        return string.IsNullOrWhiteSpace(raw) ? null : raw.Trim();
+        // Never fall back to the raw value: it may be a javascript:/data: URL.
+        return DisplayFormat.TryBuildAccessLink(raw, out var href) ? href : null;
     }
 
     private static bool TryIp(string? text, out uint value)

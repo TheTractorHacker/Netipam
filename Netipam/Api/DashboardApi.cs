@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Netipam.Data;
+using Netipam.Helpers;
 using Netipam.Services;
 using Netipam.Unifi;
 
@@ -42,15 +43,9 @@ public sealed partial class DashboardApi : IApiModule
         return size is null ? $"{name} U{pos}" : $"{name} U{pos} ({size}U)";
     }
 
+    // Only http/https links are allowed (blocks javascript:/data:/file: stored XSS).
     private static bool TryAccessLink(string? raw, out string href)
-    {
-        href = "";
-        if (string.IsNullOrWhiteSpace(raw)) return false;
-        raw = raw.Trim();
-        if (Uri.TryCreate(raw, UriKind.Absolute, out var uri)) { href = uri.ToString(); return true; }
-        if (Uri.TryCreate("http://" + raw, UriKind.Absolute, out var u2)) { href = u2.ToString(); return true; }
-        return false;
-    }
+        => DisplayFormat.TryBuildAccessLink(raw, out href);
 
     private static string WanLabel(WanInterfaceStatus wan, List<WanInterfaceStatus> group)
     {

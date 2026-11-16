@@ -123,6 +123,16 @@ public sealed class SettingsApi : IApiModule
 
             var interval = r.UpdaterIntervalSeconds <= 0 ? 0 : Math.Clamp(r.UpdaterIntervalSeconds, MinInterval, 86400);
 
+            // Stored credentials must never follow a URL change to another host: require them to be re-entered.
+            var current = await settings.LoadAsync();
+            if (!string.IsNullOrWhiteSpace(current.UnifiBaseUrl) && NormUrl(r.BaseUrl) != NormUrl(current.UnifiBaseUrl))
+            {
+                var keepsPassword = !string.IsNullOrWhiteSpace(current.UnifiPasswordProtected) && string.IsNullOrWhiteSpace(r.Password) && !r.ClearPassword;
+                var keepsKey = !string.IsNullOrWhiteSpace(current.UnifiApiKeyProtected) && string.IsNullOrWhiteSpace(r.ApiKey) && !r.ClearApiKey;
+                if (keepsPassword || keepsKey)
+                    return Results.BadRequest(new { error = "Changing the UniFi URL requires re-entering the password / API key (or clearing the stored ones)." });
+            }
+
             await settings.UpdateAsync(s =>
             {
                 s.UnifiBaseUrl = r.BaseUrl?.Trim();
@@ -202,6 +212,12 @@ public sealed class SettingsApi : IApiModule
             var err = ValidateProxmox(r, isNew: false, existingHasSecret: !string.IsNullOrWhiteSpace(e.ApiTokenSecretProtected));
             if (err is not null) return Results.BadRequest(new { error = err });
 
+            // A stored token must never be sent to a different host: changing the URL needs the secret re-entered.
+            if (NormUrl(r.BaseUrl) != NormUrl(e.BaseUrl) &&
+                !string.IsNullOrWhiteSpace(e.ApiTokenSecretProtected) &&
+                string.IsNullOrWhiteSpace(r.ApiTokenSecret))
+                return Results.BadRequest(new { error = "Changing the Proxmox URL requires re-entering the API token secret." });
+
             var wasEnabled = e.Enabled;
             ApplyProxmox(e, r, settings);
             try { await db.SaveChangesAsync(ct); }
@@ -230,9 +246,11 @@ public sealed class SettingsApi : IApiModule
                 var secret = r.ApiTokenSecret;
                 if (string.IsNullOrWhiteSpace(secret) && r.Id is int id)
                 {
-                    var protectedSecret = await db.ProxmoxInstances.AsNoTracking()
-                        .Where(p => p.Id == id).Select(p => p.ApiTokenSecretProtected).FirstOrDefaultAsync();
-                    secret = settings.Unprotect(protectedSecret);
+                    var stored = await db.ProxmoxInstances.AsNoTracking()
+                        .Where(p => p.Id == id).Select(p => new { p.BaseUrl, p.ApiTokenSecretProtected }).FirstOrDefaultAsync();
+                    if (stored is not null && NormUrl(stored.BaseUrl) != NormUrl(baseUrl))
+                        return Results.Ok(new { ok = false, message = "Enter the API token secret to test a different URL than the saved one." });
+                    secret = settings.Unprotect(stored?.ApiTokenSecretProtected);
                 }
 
                 using var doc = await client.GetVmResourcesAsync(baseUrl, tokenId, secret ?? "");
@@ -348,6 +366,8 @@ public sealed class SettingsApi : IApiModule
         _ = existingHasSecret;
         return null;
     }
+
+    private static string NormUrl(string? u) => (u ?? "").Trim().TrimEnd('/').ToLowerInvariant();
 
     private static void ApplyProxmox(ProxmoxInstance e, ProxmoxRequest r, AppSettingsService settings)
     {

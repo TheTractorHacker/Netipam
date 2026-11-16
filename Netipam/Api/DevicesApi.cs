@@ -431,7 +431,10 @@ public sealed class DevicesApi : IApiModule
         d.Source = TrimOrNull(i.Source);
         d.UsedNew = TrimOrNull(i.UsedNew);
         d.SourceDate = sourceDate;
-        d.AccessLink = TrimOrNull(i.AccessLink);
+        var accessLink = TrimOrNull(i.AccessLink);
+        if (accessLink is not null && !DisplayFormat.TryBuildAccessLink(accessLink, out _))
+            return Invalid("accessLink", "Access link must be an http(s) URL or a host name (e.g. 192.168.1.10:8080).");
+        d.AccessLink = accessLink;
         d.AccessCategoryId = i.AccessCategoryId;
         d.Description = TrimOrNull(i.Description);
 
