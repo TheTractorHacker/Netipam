@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { scanApi, type ScanFlag, type ScanHost, type ScanProfile } from './api';
 import { subnetsApi } from '../subnets/api';
@@ -24,7 +24,9 @@ export default function Scan() {
   const can = useCan();
   const toast = useToast();
   const qc = useQueryClient();
-  const [subnetId, setSubnetId] = useState<number | ''>('');
+  const [sp] = useSearchParams();
+  const [subnetId, setSubnetId] = useState<number | ''>(() => { const n = Number(sp.get('subnet')); return Number.isInteger(n) && n > 0 ? n : ''; });
+  const [block, setBlock] = useState(() => sp.get('block') ?? '');
   const [profile, setProfile] = useState<ScanProfile>('quick');
   const [ports, setPorts] = useState('');
   const [jobId, setJobId] = useState<string | null>(null);
@@ -35,6 +37,14 @@ export default function Scan() {
   const [portsTouched, setPortsTouched] = useState(false);
   const [portsServerErr, setPortsServerErr] = useState<string | null>(null);
   const subnets = useQuery({ queryKey: ['subnets'], queryFn: subnetsApi.list, enabled: can.edit });
+  const selSubnet = subnets.data?.items.find((s) => s.id === subnetId);
+  const needsBlock = (selSubnet?.usable ?? 0) > 1024;
+  const blocksQ = useQuery({
+    queryKey: ['subnet-ips', subnetId, 'blocks'], queryFn: () => subnetsApi.ips(Number(subnetId)),
+    enabled: can.edit && needsBlock, staleTime: 30_000,
+  });
+  const blockList = blocksQ.data?.blocks ?? [];
+  const blockOk = !needsBlock || /^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/.test(block.trim());
   const recent = useQuery({ queryKey: ['scans'], queryFn: scanApi.list, enabled: can.edit, refetchInterval: (qq) => (qq.state.data?.items.some((s) => s.state === 'running') ? 3000 : false) });
   useEffect(() => {
     if (subnetId === '' && subnets.data?.items.length) setSubnetId(subnets.data.items[0].id);
@@ -67,7 +77,7 @@ export default function Scan() {
   const cancelling = anyRunning && cancelledId === runningId;
 
   const start = useMutation({
-    mutationFn: () => scanApi.start({ subnetId: Number(subnetId), profile, ports: profile === 'custom' ? ports.trim() : undefined }),
+    mutationFn: () => scanApi.start({ subnetId: Number(subnetId), profile, block: needsBlock ? block.trim() : undefined, ports: profile === 'custom' ? ports.trim() : undefined }),
     onSuccess: (r) => { setJobId(r.id); setFilter('all'); setPortsServerErr(null); qc.invalidateQueries({ queryKey: ['scans'] }); toast('Scan started'); },
     onError: (e: Error) => {
       toast(e.message, 'bad');
@@ -97,7 +107,7 @@ export default function Scan() {
   const portsErr = profile === 'custom' && portsTouched && ports.trim() && !validPorts(ports) ? 'Use port numbers 1-65535, comma separated, ranges like 8000-8100' : portsServerErr;
   const responded = hosts.filter((h) => h.alive).length;
   const pct = j && j.total > 0 ? Math.min(100, Math.round((j.scanned / j.total) * 100)) : 0;
-  const canStart = can.admin && subnetId !== '' && !start.isPending && !anyRunning && (profile !== 'custom' || (ports.trim().length > 0 && validPorts(ports)));
+  const canStart = can.admin && subnetId !== '' && blockOk && !start.isPending && !anyRunning && (profile !== 'custom' || (ports.trim().length > 0 && validPorts(ports)));
   const noSubnets = subnets.isSuccess && subnets.data.items.length === 0;
 
   if (!can.edit) {
@@ -115,12 +125,24 @@ export default function Scan() {
       <PageHeader title="Network scan" sub="Discover live hosts and open ports in a subnet" />
       <form className="card scan-form" onSubmit={(e) => { e.preventDefault(); if (canStart) start.mutate(); }}>
         <Field label="Subnet">
-          <Select value={subnetId} onChange={(e) => setSubnetId(e.target.value ? Number(e.target.value) : '')} disabled={!can.admin || anyRunning}>
+          <Select value={subnetId} onChange={(e) => { setSubnetId(e.target.value ? Number(e.target.value) : ''); setBlock(''); }} disabled={!can.admin || anyRunning}>
             {subnets.isLoading && <option value="">Loading…</option>}
             {noSubnets && <option value="">No subnets defined</option>}
             {subnets.data?.items.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.cidr})</option>)}
           </Select>
         </Field>
+        {needsBlock && (
+          <Field label="Block" hint={block.trim() ? undefined : 'This subnet is large. Pick a block of /22 or smaller to scan.'}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Select value={blockList.some((b) => b.cidr === block) ? block : ''} onChange={(e) => setBlock(e.target.value)} disabled={!can.admin || anyRunning}>
+                <option value="">{blocksQ.isLoading ? 'Loading…' : 'Choose a /24…'}</option>
+                {blockList.map((b) => <option key={b.cidr} value={b.cidr}>{b.cidr} ({b.used} used)</option>)}
+              </Select>
+              <TextInput className="mono" placeholder="or 10.1.5.0/25" aria-label="Custom block CIDR" value={block}
+                onChange={(e) => setBlock(e.target.value)} disabled={!can.admin || anyRunning} />
+            </div>
+          </Field>
+        )}
         <Field label="Profile">
           <Select value={profile} onChange={(e) => setProfile(e.target.value as ScanProfile)} disabled={!can.admin || anyRunning}>
             <option value="discover">Discover only</option>

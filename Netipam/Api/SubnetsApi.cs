@@ -173,7 +173,7 @@ public sealed class SubnetsApi : IApiModule
         }).RequireAuthorization("CanEdit");
 
         // ---------- IPs of a subnet ----------
-        api.MapGet("/subnets/{id:int}/ips", async (int id, AppDbContext db, AppSettingsService settings, CancellationToken ct) =>
+        api.MapGet("/subnets/{id:int}/ips", async (int id, string? block, AppDbContext db, AppSettingsService settings, CancellationToken ct) =>
         {
             var subnet = await db.Subnets.AsNoTracking().FirstOrDefaultAsync(s => s.Id == id, ct);
             if (subnet is null) return Results.NotFound(new { error = "Subnet not found." });
@@ -192,11 +192,111 @@ public sealed class SubnetsApi : IApiModule
                 error = "Subnet CIDR is blank.";
             else if (!IpCidr.TryParseIPv4Cidr(subnet.Cidr, out info, out var parseError))
                 error = $"Invalid CIDR: {subnet.Cidr}" + (!string.IsNullOrWhiteSpace(parseError) ? $" ({parseError})" : "");
-            else if (info.UsableAddresses > MaxUsableToRender)
-                error = $"Subnet is large ({info.UsableAddresses} usable IPs). Safety limit is {MaxUsableToRender}.";
 
             if (error is not null)
                 return Results.Ok(new { subnet = header, error, rows = Array.Empty<object>(), options = opts, usableRange = (string?)null });
+
+            var large = info.UsableAddresses > MaxUsableToRender;
+            var scope = info; // the address range the rows cover
+            var blockText = (string?)null;
+            if (!string.IsNullOrWhiteSpace(block))
+            {
+                if (!IpCidr.TryParseIPv4Cidr(block.Trim(), out var binfo, out var berr))
+                    return Results.BadRequest(new { error = "Invalid block: " + (berr ?? block) });
+                if (binfo.PrefixLength < 22 || binfo.PrefixLength > 30)
+                    return Results.BadRequest(new { error = "Block must be between /22 and /30." });
+                if (binfo.NetworkUInt < info.NetworkUInt || binfo.BroadcastUInt > info.BroadcastUInt)
+                    return Results.BadRequest(new { error = "Block is not inside this subnet." });
+                scope = binfo;
+                blockText = $"{binfo.Network}/{binfo.PrefixLength}";
+            }
+
+            object[]? blocks = null;
+            if (large)
+            {
+                var span = (long)info.BroadcastUInt - info.NetworkUInt + 1;
+                var firstBlock = info.NetworkUInt >> 8;
+                var count = (int)Math.Min(span >> 8, int.MaxValue);
+                if (span < 256) count = 1;
+                if (count > 4096)
+                {
+                    if (blockText is null)
+                        return Results.Ok(new
+                        {
+                            subnet = header, error = "Subnet is too large to browse (max /12).", rows = Array.Empty<object>(),
+                            options = opts, usableRange = (string?)null, large = true, block = (string?)null,
+                            blocks = Array.Empty<object>(),
+                        });
+                }
+                else
+                {
+                    var devs = await db.Devices.AsNoTracking()
+                        .Where(d => d.IpAddress != null && d.IpAddress != "")
+                        .Select(d => new { d.IpAddress, d.IsOnline, d.IsStatusTracked })
+                        .ToListAsync(ct);
+                    var res = await db.IpAssignments.AsNoTracking().Where(a => a.SubnetId == id)
+                        .Select(a => a.IpAddress).ToListAsync(ct);
+
+                    var usedBy = new int[count];
+                    var onlineBy = new int[count];
+                    var offlineBy = new int[count];
+                    var resBy = new int[count];
+                    // per-IP state: 1 = used, 2 = online, 4 = tracked
+                    var state = new Dictionary<uint, byte>();
+                    foreach (var d in devs)
+                    {
+                        if (!TryIp(d.IpAddress, out var u) || u < info.NetworkUInt || u > info.BroadcastUInt) continue;
+                        state.TryGetValue(u, out var st);
+                        st |= 1;
+                        if (d.IsStatusTracked) st |= 4;
+                        if (d.IsStatusTracked && d.IsOnline) st |= 2;
+                        state[u] = st;
+                    }
+                    var usedIps = state.Keys.ToHashSet();
+                    foreach (var (u, st) in state)
+                    {
+                        var bi = (int)((u >> 8) - firstBlock);
+                        if (bi < 0 || bi >= count) continue;
+                        usedBy[bi]++;
+                        if ((st & 2) != 0) onlineBy[bi]++;
+                        else if ((st & 4) != 0) offlineBy[bi]++;
+                    }
+                    var resSeen = new HashSet<uint>();
+                    foreach (var r in res)
+                    {
+                        if (!TryIp(r, out var u) || u < info.NetworkUInt || u > info.BroadcastUInt) continue;
+                        if (usedIps.Contains(u) || !resSeen.Add(u)) continue;
+                        var bi = (int)((u >> 8) - firstBlock);
+                        if (bi >= 0 && bi < count) resBy[bi]++;
+                    }
+
+                    blocks = new object[count];
+                    for (var i = 0; i < count; i++)
+                    {
+                        var bs = Math.Max(info.NetworkUInt, (uint)((firstBlock + (uint)i) << 8));
+                        var be = Math.Min(info.BroadcastUInt, (uint)(((firstBlock + (uint)i) << 8) | 255));
+                        long usable = (long)be - bs + 1;
+                        if (usable > 2) usable -= 2; // network + broadcast of the block
+                        blocks[i] = new
+                        {
+                            cidr = $"{IpCidr.UIntToIPv4(bs)}/24",
+                            usable,
+                            used = usedBy[i],
+                            online = onlineBy[i],
+                            offline = offlineBy[i],
+                            reserved = resBy[i],
+                            free = (int)Math.Max(0, usable - usedBy[i] - resBy[i]),
+                        };
+                    }
+                }
+            }
+
+            if (large && blockText is null)
+                return Results.Ok(new
+                {
+                    subnet = header, error = (string?)null, rows = Array.Empty<object>(), options = opts,
+                    usableRange = (string?)null, large = true, block = (string?)null, blocks,
+                });
 
             var devicesWithIp = await db.Devices.AsNoTracking()
                 .Include(d => d.ClientType)
@@ -207,14 +307,14 @@ public sealed class SubnetsApi : IApiModule
             var resByIp = new Dictionary<uint, IpAssignment>();
             foreach (var a in reservations)
             {
-                if (!TryIp(a.IpAddress, out var u) || u < info.NetworkUInt || u > info.BroadcastUInt) continue;
+                if (!TryIp(a.IpAddress, out var u) || u < scope.NetworkUInt || u > scope.BroadcastUInt) continue;
                 resByIp[u] = a;
             }
 
             var byIp = new Dictionary<uint, List<Device>>();
             foreach (var d in devicesWithIp)
             {
-                if (!TryIp(d.IpAddress, out var u) || u < info.NetworkUInt || u > info.BroadcastUInt) continue;
+                if (!TryIp(d.IpAddress, out var u) || u < scope.NetworkUInt || u > scope.BroadcastUInt) continue;
                 if (!byIp.TryGetValue(u, out var list)) byIp[u] = list = new List<Device>();
                 list.Add(d);
             }
@@ -224,7 +324,7 @@ public sealed class SubnetsApi : IApiModule
                           & IpCidr.TryParseIPv4(subnet.DhcpRangeEnd ?? "", out var de, out _);
             if (hasDhcp) { dMin = Math.Min(ds, de); dMax = Math.Max(ds, de); }
 
-            var rows = GetUsableIps(info).Select(u =>
+            var rows = GetUsableIps(scope).Select(u =>
             {
                 byIp.TryGetValue(u, out var devs);
                 devs ??= new List<Device>();
@@ -282,7 +382,7 @@ public sealed class SubnetsApi : IApiModule
                 };
             }).ToList();
 
-            return Results.Ok(new { subnet = header, error = (string?)null, rows, options = opts, usableRange = UsableRange(info) });
+            return Results.Ok(new { subnet = header, error = (string?)null, rows, options = opts, usableRange = UsableRange(scope), large, block = blockText, blocks });
         });
 
         // ---------- IP reservation ----------

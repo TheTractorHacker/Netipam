@@ -18,6 +18,6 @@ export interface ScanJob extends ScanSummary { ports: number[]; error: string | 
 export const scanApi = {
   list: () => http.get<{ items: ScanSummary[] }>('/scans'),
   get: (id: string) => http.get<ScanJob>(`/scans/${encodeURIComponent(id)}`),
-  start: (b: { subnetId: number; profile: ScanProfile; ports?: string }) => http.post<{ id: string }>('/scans', b),
+  start: (b: { subnetId: number; profile: ScanProfile; ports?: string; block?: string }) => http.post<{ id: string }>('/scans', b),
   cancel: (id: string) => http.post<{ ok: boolean }>(`/scans/${encodeURIComponent(id)}/cancel`),
 };

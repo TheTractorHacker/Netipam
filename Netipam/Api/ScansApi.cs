@@ -6,7 +6,7 @@ namespace Netipam.Api;
 
 public sealed class ScansApi : IApiModule
 {
-    public sealed record StartInput(int? SubnetId, string? Profile, string? Ports);
+    public sealed record StartInput(int? SubnetId, string? Profile, string? Ports, string? Block = null);
 
     public void Map(RouteGroupBuilder api)
     {
@@ -24,10 +24,27 @@ public sealed class ScansApi : IApiModule
             if (!NetworkScanService.IsPrivate(info))
                 return Results.BadRequest(new { error = "Only private address ranges can be scanned." });
 
-            var (first, last) = NetworkScanService.HostRange(info);
+            var (sFirst, sLast) = NetworkScanService.HostRange(info);
+            var subnetHosts = sLast - sFirst + 1;
+            var scanInfo = info;
+            var blockText = (body.Block ?? "").Trim();
+            if (blockText.Length > 0)
+            {
+                if (!IpCidr.TryParseIPv4Cidr(blockText, out var binfo, out var berr))
+                    return Results.BadRequest(new { error = berr ?? "Block is not a valid CIDR." });
+                if (binfo.NetworkUInt < info.NetworkUInt || binfo.BroadcastUInt > info.BroadcastUInt)
+                    return Results.BadRequest(new { error = "Block must be inside the subnet." });
+                if (!NetworkScanService.IsPrivate(binfo))
+                    return Results.BadRequest(new { error = "Only private address ranges can be scanned." });
+                scanInfo = binfo;
+            }
+            else if (subnetHosts > NetworkScanService.MaxHosts)
+                return Results.BadRequest(new { error = "This subnet is large. Pick a block of /22 or smaller to scan." });
+
+            var (first, last) = NetworkScanService.HostRange(scanInfo);
             var hosts = last - first + 1;
             if (hosts > NetworkScanService.MaxHosts)
-                return Results.BadRequest(new { error = $"Subnet too large: at most {NetworkScanService.MaxHosts} hosts (/22) can be scanned." });
+                return Results.BadRequest(new { error = $"Block too large: at most {NetworkScanService.MaxHosts} hosts (/22) can be scanned." });
             if ((long)hosts * ports.Length > NetworkScanService.MaxProbes)
                 return Results.BadRequest(new { error = "Too many probes (hosts x ports). Use fewer ports." });
 
@@ -37,9 +54,9 @@ public sealed class ScansApi : IApiModule
                 .ToListAsync(ct);
             var known = devs.Select(d => (d.IpAddress!.Trim(), new NetworkScanService.KnownDevice(d.Id, d.Name, d.IsOnline)));
 
-            var id = scans.TryStart(subnet.Id, subnet.Name, info, profile, ports, known);
+            var id = scans.TryStart(subnet.Id, subnet.Name, scanInfo, profile, ports, known);
             if (id == null) return Results.Conflict(new { error = "A scan is already running." });
-            log.LogInformation("Network scan {ScanId} started by {User}: {Cidr} profile={Profile}", id, http.User.Identity?.Name ?? "unknown", info.Cidr, profile);
+            log.LogInformation("Network scan {ScanId} started by {User}: {Cidr} profile={Profile}", id, http.User.Identity?.Name ?? "unknown", scanInfo.Cidr, profile);
             return Results.Accepted($"/api/scans/{id}", new { id });
         }).RequireAuthorization("AdminOnly");
 

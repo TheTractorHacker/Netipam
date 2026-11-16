@@ -52,3 +52,18 @@
 .subnets-dev dd { margin: 0; overflow-wrap: anywhere; }
 .subnets-summary { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--muted); font-size: 13px; margin-bottom: 14px; }
 .subnets-summary b { color: var(--text); font-weight: 600; }
+
+/* Large-subnet block heatmap */
+.subnets-blocks { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; }
+.subnets-block { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 52px; padding: 4px; border-radius: 7px; border: 1px solid var(--line); color: var(--text); font: inherit; font-size: 12px; cursor: pointer; }
+.subnets-block:hover { border-color: var(--text); z-index: 2; }
+.subnets-block:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.subnets-block .blk-name { font-weight: 600; font-variant-numeric: tabular-nums; }
+.subnets-block .blk-used { color: var(--muted); font-size: 11px; }
+.blk-lo { background: color-mix(in srgb, var(--accent) 8%, var(--panel-2)); border-color: var(--line); }
+.blk-hi { background: color-mix(in srgb, var(--accent) 70%, var(--panel-2)); }
+.blk-off { background: color-mix(in srgb, var(--bad) 45%, var(--panel-2)); }
+.subnets-crumb { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.subnets-crumb .chip { padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); font-size: 12px; }
+.subnets-crumb-nav { display: inline-flex; gap: 6px; margin-left: auto; }
+@media (max-width: 560px) { .subnets-crumb-nav { margin-left: 0; } .subnets-blocks { grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); } }

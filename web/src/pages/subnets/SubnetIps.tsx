@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { subnetsApi, type IpDevice, type IpRow, type IpStatus } from './api';
+import { subnetsApi, type IpBlock, type IpDevice, type IpRow, type IpStatus } from './api';
 import { useCan } from '../../auth';
 import { PageHeader, Stat, Empty } from '../../components/ui';
 import {
@@ -30,6 +30,40 @@ function cellClass(r: IpRow) {
     default: return 'c-free';
   }
 }
+const thirdOctet = (cidr: string) => cidr.split('.')[2] ?? '';
+function blockLabel(b: IpBlock) { return `.${thirdOctet(b.cidr)}.x`; }
+function blockTitle(b: IpBlock) {
+  return `${b.cidr}: ${b.used} used of ${b.usable} (${b.online} online, ${b.offline} offline), ${b.reserved} reserved, ${b.free} free`;
+}
+function blockStyle(b: IpBlock): React.CSSProperties {
+  const u = b.usable ? Math.min(1, b.used / b.usable) : 0;
+  const pct = Math.round(8 + u * 62);
+  const base = b.offline > 0 ? 'var(--bad)' : 'var(--accent)';
+  return { background: `color-mix(in srgb, ${base} ${pct}%, var(--panel-2))` };
+}
+
+function BlockMap({ blocks, onPick }: { blocks: IpBlock[]; onPick: (cidr: string) => void }) {
+  return (
+    <div className="card">
+      <div className="subnets-legend">
+        <span><i className="subnets-sw blk-lo" />Mostly free</span>
+        <span><i className="subnets-sw blk-hi" />Heavily used</span>
+        <span><i className="subnets-sw blk-off" />Has offline devices</span>
+        <span className="muted">Click a block to see its IPs</span>
+      </div>
+      <div className="subnets-blocks">
+        {blocks.map((b) => (
+          <button key={b.cidr} type="button" className="subnets-block" style={blockStyle(b)}
+            title={blockTitle(b)} aria-label={blockTitle(b)} onClick={() => onPick(b.cidr)}>
+            <span className="blk-name">{blockLabel(b)}</span>
+            <span className="blk-used num">{b.used}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const lastOctet = (ip: string) => ip.slice(ip.lastIndexOf('.') + 1);
 const has = (v: string | null | undefined, n: string) => !!v && v.toLowerCase().includes(n);
 
@@ -158,7 +192,9 @@ function IpDetail({ subnetId, row, canEdit, tips, onClose }: { subnetId: number;
 
 export default function SubnetIpsPage() {
   const id = Number(useParams().id);
-  const { edit } = useCan();
+  const { edit, admin } = useCan();
+  const [params, setParams] = useSearchParams();
+  const block = params.get('block') || undefined;
   const [q, setQ] = useState('');
   const dq = useDebounced(q, 150);
   const [view, setView] = useState<ViewMode>('all');
@@ -169,8 +205,8 @@ export default function SubnetIpsPage() {
   const [sel, setSel] = useState<string | null>(null);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['subnets', 'ips', id],
-    queryFn: () => subnetsApi.ips(id),
+    queryKey: ['subnets', 'ips', id, block ?? null],
+    queryFn: () => subnetsApi.ips(id, block),
     enabled: Number.isFinite(id),
     refetchInterval: (query) => {
       const s = query.state.data?.options.autoRefreshSeconds ?? 0;
@@ -210,6 +246,10 @@ export default function SubnetIpsPage() {
   if (!data) return null;
 
   const { subnet, options } = data;
+  const blocks = data.blocks ?? [];
+  const showBlocks = !!data.large && !block;
+  const blockIdx = block ? blocks.findIndex((b) => b.cidr === (data.block ?? block)) : -1;
+  const goBlock = (cidr: string | null) => setParams(cidr ? { block: cidr } : {});
   const used = rows.filter((r) => r.isUsed).length;
   const pct = rows.length ? (used * 100) / rows.length : 0;
   const selRow = sel ? rows.find((r) => r.ip === sel) ?? null : null;
@@ -233,10 +273,33 @@ export default function SubnetIpsPage() {
 
       {data.error ? (
         <div className="error" role="alert">{data.error}</div>
+      ) : showBlocks ? (
+        <>
+          <div className="stats">
+            <Stat label="Usable IPs" value={blocks.reduce((a, b) => a + b.usable, 0)} />
+            <Stat label="Used" value={blocks.reduce((a, b) => a + b.used, 0)} tone="info" />
+            <Stat label="Free" value={blocks.reduce((a, b) => a + b.free, 0)} />
+            <Stat label="Offline" value={blocks.reduce((a, b) => a + b.offline, 0)} tone="bad" />
+          </div>
+          <BlockMap blocks={blocks} onPick={goBlock} />
+        </>
       ) : rows.length === 0 ? (
         <Empty>No usable IPs for this subnet.</Empty>
       ) : (
         <>
+          {block && (
+            <div className="subnets-crumb">
+              <button type="button" className="btn sm" onClick={() => goBlock(null)}>← All blocks</button>
+              <span className="chip">Block {data.block ?? block} of {subnet.cidr}</span>
+              {admin && <Link className="btn sm" to={`/scan?subnet=${subnet.id}&block=${encodeURIComponent(data.block ?? block)}`}>Scan this block</Link>}
+              <span className="subnets-crumb-nav">
+                <button type="button" className="btn sm" aria-label="Previous block" disabled={blockIdx <= 0}
+                  onClick={() => goBlock(blocks[blockIdx - 1].cidr)}>‹ Prev</button>
+                <button type="button" className="btn sm" aria-label="Next block" disabled={blockIdx < 0 || blockIdx >= blocks.length - 1}
+                  onClick={() => goBlock(blocks[blockIdx + 1].cidr)}>Next ›</button>
+              </span>
+            </div>
+          )}
           <div className="stats">
             <Stat label="Usable IPs" value={rows.length} />
             <Stat label="Used" value={used} tone="info" />

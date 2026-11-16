@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQueries, useQueryClient } from '@tanstack/react-query';
-import { subnetsApi, type IpRow, type IpStatus } from '../subnets/api';
+import { subnetsApi, type IpBlock, type IpRow, type IpStatus } from '../subnets/api';
 import type { SubnetCard } from './api';
 import { Badge, useToast } from '../../components/kit';
 import { Empty } from '../../components/ui';
@@ -33,10 +33,17 @@ async function copy(text: string): Promise<boolean> {
   } catch { return false; }
 }
 
+function blockKind(b: IpBlock): string {
+  if (b.offline > 0) return 'off';
+  const pct = b.usable > 0 ? (b.used + b.reserved) / b.usable : 0;
+  return pct >= 0.9 ? 'hi' : pct >= 0.5 ? 'mid' : pct > 0 ? 'lo' : 'free';
+}
+
 interface Pick { subnetId: number; ip: string }
 
 export default function AddressSpace({ subnets, refetchMs }: { subnets: SubnetCard[]; refetchMs: number | false }) {
   const qc = useQueryClient();
+  const nav = useNavigate();
   const toast = useToast();
   const { edit } = useCan();
   const [pick, setPick] = useState<Pick | null>(null);
@@ -49,7 +56,7 @@ export default function AddressSpace({ subnets, refetchMs }: { subnets: SubnetCa
     queries: sorted.map((s) => ({
       queryKey: ['subnet-ips', s.id],
       queryFn: () => subnetsApi.ips(s.id),
-      enabled: s.usable <= MAX_CELLS,
+      enabled: true,
       refetchInterval: refetchMs,
       staleTime: 15_000,
     })),
@@ -92,7 +99,7 @@ export default function AddressSpace({ subnets, refetchMs }: { subnets: SubnetCa
         <div className="as-subnets">
           {sorted.map((s, i) => {
             const q = maps[i];
-            const rows = q?.data?.rows;
+            const rows = s.usable > MAX_CELLS ? undefined : q?.data?.rows;
             const pct = s.usable > 0 ? Math.round((s.used * 100) / s.usable) : 0;
             const nextFree = rows?.find((r) => !r.isUsed && r.status === 'available')?.ip;
             return (
@@ -114,7 +121,26 @@ export default function AddressSpace({ subnets, refetchMs }: { subnets: SubnetCa
                   </div>
                 </header>
                 {s.usable > MAX_CELLS ? (
-                  <div className="as-big muted">Large subnet ({s.usable.toLocaleString()} addresses) — <Link to={`/subnets/${s.id}/ips`}>open its list</Link>.</div>
+                  q?.isError ? <div className="as-big bad-text">Could not load this subnet.</div>
+                  : !q?.data ? <div className="as-skel" aria-hidden />
+                  : q.data.error ? <div className="as-big muted">{q.data.error} <Link to={`/subnets/${s.id}/ips`}>Open its list</Link>.</div>
+                  : (
+                    <>
+                      <div className="as-blocks-sum muted">
+                        {(q.data.blocks ?? []).reduce((a, b) => a + b.used, 0).toLocaleString()} used across {(q.data.blocks ?? []).length} blocks
+                      </div>
+                      <div className="as-strip" role="list">
+                        {(q.data.blocks ?? []).map((b) => (
+                          <button key={b.cidr} type="button" role="listitem" className={`as-cell as-block ${blockKind(b)}`}
+                            title={`${b.cidr} - ${b.used} used, ${b.offline} offline`}
+                            aria-label={`${b.cidr}, ${b.used} used, ${b.offline} offline`}
+                            onClick={() => nav(`/subnets/${s.id}/ips?block=${encodeURIComponent(b.cidr)}`)}>
+                            <span>{b.cidr.split('.')[2]}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )
                 ) : q?.isError ? (
                   <div className="as-big bad-text">Could not load this subnet.</div>
                 ) : !rows ? (

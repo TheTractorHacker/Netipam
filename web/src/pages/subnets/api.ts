@@ -32,7 +32,14 @@ export interface IpRow {
   ip: string; status: IpStatus; isUsed: boolean; inDhcp: boolean; online: boolean;
   reservation: IpReservation | null; devices: IpDevice[];
 }
+/** One /24 slice of a large subnet (too big to draw per-IP). */
+export interface IpBlock { cidr: string; used: number; online: number; offline: number; reserved: number; free: number; usable: number }
 export interface SubnetIps {
+  /** True when the subnet is too large for a per-IP map; `blocks` summarises it and `?block=` drills in. */
+  large?: boolean;
+  blocks?: IpBlock[];
+  /** The block these rows cover (large subnets only). */
+  block?: string | null;
   subnet: { id: number; name: string; cidr: string; description: string | null; vlanId: number | null;
     dhcpRangeStart: string | null; dhcpRangeEnd: string | null; dns1: string | null; dns2: string | null };
   error: string | null; usableRange: string | null; rows: IpRow[];
@@ -46,7 +53,8 @@ export const subnetsApi = {
   remove: (id: number) => http.del(`/subnets/${id}`),
   cidr: (value: string) => http.get<CidrPreview>(`/subnets/cidr?value=${encodeURIComponent(value)}`),
   setFreeIpCount: (freeIpCount: number) => http.put<{ freeIpCount: number }>('/subnets/settings', { freeIpCount }),
-  ips: (id: number) => http.get<SubnetIps>(`/subnets/${id}/ips`),
+  ips: (id: number, block?: string) =>
+    http.get<SubnetIps>(`/subnets/${id}/ips${block ? `?block=${encodeURIComponent(block)}` : ''}`),
   saveReservation: (id: number, b: { ip: string; status: string; notes: string }) =>
     http.put(`/subnets/${id}/reservations`, b),
 };

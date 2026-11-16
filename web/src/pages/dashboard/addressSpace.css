@@ -50,3 +50,12 @@
   .as-body.has-pick { grid-template-columns: minmax(0, 1fr); padding-bottom: 230px; }
   .as-inspect { position: fixed; left: 12px; right: 12px; bottom: 12px; top: auto; z-index: 20; max-height: 60vh; overflow: auto; box-shadow: 0 8px 30px rgba(0,0,0,.45); }
 }
+
+.as-blocks-sum { font-size: 12px; margin-bottom: 6px; }
+.as-cell.as-block { color: var(--muted); }
+.as-cell.as-block.lo { background: color-mix(in srgb, var(--accent) 25%, transparent); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+.as-cell.as-block.mid { background: color-mix(in srgb, var(--accent) 55%, transparent); color: var(--accent-ink); }
+.as-cell.as-block.hi { background: var(--accent); color: var(--accent-ink); }
+.as-cell.as-block.free { background: color-mix(in srgb, var(--ok) 20%, transparent); border-color: color-mix(in srgb, var(--ok) 70%, transparent); }
+.as-cell.as-block.off { background: color-mix(in srgb, var(--bad) 22%, transparent); border-color: var(--bad); color: var(--bad); }
+.as-cell.as-block span { color: inherit; }
