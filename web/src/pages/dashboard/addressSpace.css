@@ -1,0 +1,52 @@
+.as { display: grid; gap: 12px; }
+.as-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.as-head h2 { margin: 0; }
+.as-legend { display: flex; flex-wrap: wrap; gap: 4px; }
+.as-key { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
+.as-key:hover { color: var(--text); }
+.as-key.active { color: var(--text); border-color: var(--accent); background: var(--panel-2); }
+.as-sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+.as-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; }
+.as-body.has-pick { grid-template-columns: minmax(0, 1fr) 300px; }
+.as-subnets { display: grid; gap: 12px; min-width: 0; }
+.as-net { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); padding: 12px 14px; display: grid; gap: 10px; min-width: 0; }
+.as-net-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 14px; }
+.as-net-title { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-width: 0; }
+.as-net-name { font-weight: 600; color: var(--text); }
+.as-net-cidr { color: var(--muted); font-size: 12px; }
+.as-net-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 13px; }
+.as-pct b { font-size: 15px; }
+.as-pct.warn { color: var(--warn); }
+.as-pct.crit { color: var(--bad); }
+.as-big { font-size: 13px; }
+.as-skel { height: 34px; border-radius: 6px; background: var(--panel-2); }
+
+.as-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(26px, 1fr)); gap: 3px; }
+.as-cell { height: 26px; padding: 0; border-radius: 4px; border: 1px solid transparent; font: inherit; font-size: 10px; font-variant-numeric: tabular-nums; color: transparent; cursor: pointer; transition: transform .08s; }
+.as-cell:hover, .as-cell:focus-visible { color: inherit; transform: scale(1.2); z-index: 2; outline: 2px solid var(--text); outline-offset: 0; }
+.as-cell.sel { outline: 2px solid var(--accent); outline-offset: 1px; color: inherit; }
+.as-cell.dim { opacity: .15; }
+.as-cell.on, .as-sw.on { background: var(--accent); color: var(--accent-ink); }
+.as-cell.off, .as-sw.off { background: color-mix(in srgb, var(--bad) 22%, transparent); border-color: var(--bad); color: var(--bad); }
+.as-cell.res, .as-sw.res { background: var(--warn); color: #111; }
+.as-cell.dhcp, .as-sw.dhcp { background: transparent; border: 1px dashed var(--info); color: var(--info); }
+.as-cell.dep, .as-sw.dep { background: var(--bad); color: #fff; }
+.as-cell.free, .as-sw.free { background: color-mix(in srgb, var(--ok) 20%, transparent); border-color: color-mix(in srgb, var(--ok) 70%, transparent); color: var(--ok); }
+.as-sw { border: 1px solid transparent; }
+.as-sw.off, .as-sw.free { color: inherit; }
+
+.as-inspect { position: sticky; top: 72px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); padding: 14px; display: grid; gap: 12px; min-width: 0; }
+.as-ins-head { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+.as-ins-ip { font-size: 18px; font-weight: 600; }
+.as-ins-name { font-weight: 600; margin-bottom: 6px; overflow-wrap: anywhere; }
+.as-ins-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.as-ins-dev dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: 0; font-size: 13px; }
+.as-ins-dev dt { color: var(--muted); }
+.as-ins-dev dd { margin: 0; overflow-wrap: anywhere; }
+.as-ins-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+
+@media (max-width: 900px) {
+  .as-body.has-pick { grid-template-columns: minmax(0, 1fr); padding-bottom: 230px; }
+  .as-inspect { position: fixed; left: 12px; right: 12px; bottom: 12px; top: auto; z-index: 20; max-height: 60vh; overflow: auto; box-shadow: 0 8px 30px rgba(0,0,0,.45); }
+}

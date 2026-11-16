@@ -2,11 +2,12 @@ import { Fragment, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   dashboardApi, type CriticalDevice, type DashboardData, type DiscoveryAlert, type FirmwareAlert,
-  type OfflineAlert, type SubnetCard,
+  type OfflineAlert,
 } from './api';
-import { PageHeader, Empty } from '../../components/ui';
+import { PageHeader } from '../../components/ui';
 import { Badge, ErrorNote, Field, Modal, Select, Spinner, TextInput, timeAgo, useToast } from '../../components/kit';
 import { useCan } from '../../auth';
+import AddressSpace from './AddressSpace';
 import './dashboard.css';
 
 /* ---------- helpers ---------- */
@@ -112,7 +113,7 @@ function Hero({ d }: { d: DashboardData }) {
         <div>
           <div className="dash-hero-title" role="status">{title}</div>
           <div className="dash-hero-sub">
-            {t.clients} clients · {t.devices} devices · {t.wired} wired · {t.wifi} wireless
+            {t.clients} clients · {t.devices} devices{t.wired + t.wifi > 0 ? ` · ${t.wired} wired · ${t.wifi} wireless` : ''}
           </div>
         </div>
       </div>
@@ -130,49 +131,6 @@ function Hero({ d }: { d: DashboardData }) {
               {w.label}: {w.isUp === true ? 'Up' : w.isUp === false ? 'Down' : 'Unknown'}{w.ip ? ` • ${w.ip}` : ''}
             </Badge>
           ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-/* ---------- your networks ---------- */
-function Networks({ subnets }: { subnets: SubnetCard[] }) {
-  const sorted = [...subnets].sort((a, b) => (a.vlanId ?? 1e9) - (b.vlanId ?? 1e9) || a.name.localeCompare(b.name));
-  return (
-    <section aria-labelledby="dash-nets-h">
-      <div className="dash-section-head">
-        <h2 id="dash-nets-h">Your networks</h2>
-        <a className="btn ghost sm" href="/subnets">Manage subnets</a>
-      </div>
-      {sorted.length === 0 ? (
-        <Empty>No subnets yet. <a href="/subnets">Add one</a> and it will show up here as a live card.</Empty>
-      ) : (
-        <div className="dash-grid">
-          {sorted.map((r) => {
-            const pct = r.usable > 0 ? Math.round((r.used * 100) / r.usable) : 0;
-            const tone = pct >= 90 ? 'crit' : pct >= 75 ? 'warn' : '';
-            return (
-              <a key={r.id} className={`dash-net ${tone}`} href={`/subnets/${r.id}/ips`} aria-label={`${r.name}, ${r.cidr}, ${pct}% used`}>
-                <div className="dash-net-head">
-                  <div style={{ minWidth: 0 }}>
-                    <div className="dash-net-name">{r.name}</div>
-                    <div className="dash-net-cidr">{r.cidr}</div>
-                  </div>
-                  {r.vlanId !== null && <Badge>VLAN {r.vlanId}</Badge>}
-                </div>
-                <div className="dash-net-body">
-                  <div className="dash-ring" style={{ ['--p' as string]: Math.min(100, pct) }}><span>{pct}%</span></div>
-                  <div className="dash-net-stats">
-                    <div><b>{r.used}</b> of {r.usable} used</div>
-                    <div><b>{r.free}</b> free</div>
-                    <div><b>{r.clients}</b> clients · <b>{r.devices}</b> devices</div>
-                    {r.offline > 0 && <div className="off"><b>{r.offline}</b> offline</div>}
-                  </div>
-                </div>
-              </a>
-            );
-          })}
         </div>
       )}
     </section>
@@ -442,35 +400,6 @@ function DiscoveryPanel({ d, canEdit, onDone }: { d: DashboardData; canEdit: boo
   );
 }
 
-/* ---------- subnets overview ---------- */
-function Overview({ subnets }: { subnets: SubnetCard[] }) {
-  return (
-    <Panel title="Subnets overview">
-      {subnets.length === 0 ? <div className="dash-note">No subnets found.</div> : (
-        <table className="table">
-          <thead>
-            <tr><th>Subnet</th><th>CIDR</th><th className="r">Usable</th><th className="r">Used IPs</th><th className="r">Available</th><th className="r dash-hide-sm">Clients</th><th className="r dash-hide-sm">Devices</th><th className="r">Offline</th></tr>
-          </thead>
-          <tbody>
-            {subnets.map((r) => (
-              <tr key={r.id}>
-                <td className="strong"><a href={`/subnets/${r.id}/ips`}>{r.name}</a></td>
-                <td className="mono"><a href={`/subnets/${r.id}/ips`}>{r.cidr}</a></td>
-                <td className="r num">{r.usable}</td>
-                <td className="r num">{r.used}</td>
-                <td className="r num">{r.free}</td>
-                <td className="r num dash-hide-sm">{r.clients}</td>
-                <td className="r num dash-hide-sm">{r.devices}</td>
-                <td className="r num">{r.offline > 0 ? <a href={`/subnets/${r.id}/clients/offline`}><Badge tone="bad">{r.offline}</Badge></a> : 0}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </Panel>
-  );
-}
-
 /* ---------- page ---------- */
 export default function Dashboard() {
   const qc = useQueryClient();
@@ -491,7 +420,7 @@ export default function Dashboard() {
   const u = data?.updater;
   const sub = data ? (
     <span className="dash-updated">
-      Last update: {u?.lastRunUtc ? fmtDate(u.lastRunUtc, data.settings.dateFormat) : '—'}
+      {u?.lastRunUtc ? `Last update: ${fmtDate(u.lastRunUtc, data.settings.dateFormat)}` : 'No import has run yet'}
       {u?.lastError ? <span className="bad-text"> • Error: {u.lastError}</span> : u?.lastRunUtc ? ` • Changed: ${u.lastChangedCount}` : ''}
     </span>
   ) : null;
@@ -511,13 +440,12 @@ export default function Dashboard() {
         <div className="dash">
           {data.totals.clients + data.totals.devices === 0 && <Welcome />}
           <Hero d={data} />
-          <Networks subnets={data.subnets} />
+          <AddressSpace subnets={data.subnets} refetchMs={interval} />
           <div className="dash-panels">
-            <OfflinePanel d={data} canEdit={edit} onDone={onDone} />
-            <FirmwarePanel d={data} canEdit={edit} onDone={onDone} />
+            {data.offlineAlerts.length > 0 && <OfflinePanel d={data} canEdit={edit} onDone={onDone} />}
+            {data.firmwareAlerts.length > 0 && <FirmwarePanel d={data} canEdit={edit} onDone={onDone} />}
             <CriticalPanel d={data} />
             <DiscoveryPanel d={data} canEdit={edit} onDone={onDone} />
-            <Overview subnets={data.subnets} />
           </div>
         </div>
       )}
