@@ -6,7 +6,8 @@
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SNAP="$(mktemp -d "${TMPDIR:-/tmp}/netipam-snap.XXXXXX")"
-trap 'docker run --rm -v "$SNAP":/s alpine rm -rf /s/obj-out >/dev/null 2>&1; rm -rf "$SNAP"' EXIT
+# Build output is root-owned (container user), so delete the snapshot from inside a container.
+trap 'docker run --rm -v "$(dirname "$SNAP")":/p alpine rm -rf "/p/$(basename "$SNAP")" >/dev/null 2>&1' EXIT
 
 tar -C "$ROOT" --exclude=bin --exclude=obj --exclude=node_modules --exclude=.git --exclude='Netipam/wwwroot/app' -cf - Netipam Netipam.Postgres Netipam.slnx 2>/dev/null | tar -C "$SNAP" -xf -
 
