@@ -20,10 +20,16 @@ export interface NavEntry {
 export interface AppModule {
   routes: { path: string; element: ReactNode }[];
   nav?: NavEntry[];
+  /** Always-mounted elements (e.g. the Ctrl+K command palette). Rendered once inside the shell. */
+  overlays?: ReactNode[];
 }
+
+/** Dispatch on window to open the global search palette; the search module listens for it. */
+export const OPEN_SEARCH_EVENT = 'netipam:open-search';
 
 const found = import.meta.glob<{ default: AppModule }>('./pages/*/module.tsx', { eager: true });
 
 export const modules: AppModule[] = Object.values(found).map((m) => m.default);
 export const allRoutes = modules.flatMap((m) => m.routes);
 export const allNav = modules.flatMap((m) => m.nav ?? []);
+export const allOverlays = modules.flatMap((m) => m.overlays ?? []);

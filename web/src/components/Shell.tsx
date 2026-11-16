@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { authApi, type Me } from '../auth';
-import { allNav, type NavEntry } from '../registry';
+import { allNav, allOverlays, OPEN_SEARCH_EVENT, type NavEntry } from '../registry';
 
 const GROUPS: NavEntry['group'][] = ['Overview', 'Inventory', 'Operations', 'System'];
 
@@ -71,7 +71,15 @@ export default function Shell({ me, children }: { me: Me; children: React.ReactN
           <button className="btn ghost sm" onClick={logout}>Log out</button>
         </div>
       </aside>
-      <main className="main">{children}</main>
+      <div className="content">
+        <div className="topbar">
+          <button className="searchbtn" onClick={() => window.dispatchEvent(new Event(OPEN_SEARCH_EVENT))}>
+            <span>Search devices, IPs, subnets…</span><kbd>Ctrl K</kbd>
+          </button>
+        </div>
+        <main className="main">{children}</main>
+      </div>
+      {allOverlays.map((o, i) => <div key={i} className="overlay-slot">{o}</div>)}
     </div>
   );
 }
