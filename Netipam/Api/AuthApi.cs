@@ -12,12 +12,14 @@ public sealed class AuthApi : IApiModule
         api.MapPost("/auth/login", async (LoginRequest req, SignInManager<ApplicationUser> signIn) =>
         {
             var result = await signIn.PasswordSignInAsync(req.Username ?? "", req.Password ?? "", req.RememberMe, lockoutOnFailure: true);
-            if (result.IsLockedOut)
-                return Results.Json(new { ok = false, error = "Too many failed attempts. Try again in a few minutes." }, statusCode: 429);
-            return result.Succeeded
-                ? Results.Ok(new { ok = true })
-                : Results.Json(new { ok = false, error = "Invalid username or password." }, statusCode: 401);
-        }).AllowAnonymous();
+            if (result.Succeeded) return Results.Ok(new { ok = true });
+
+            // Wrong password, unknown user and locked-out account all get the identical reply, so the
+            // response never reveals which usernames exist. Per-IP throttling (RequireRateLimiting) slows guessing.
+            return Results.Json(
+                new { ok = false, error = "Invalid username or password. If this keeps happening, wait a few minutes and try again." },
+                statusCode: 401);
+        }).AllowAnonymous().RequireRateLimiting("login");
 
         api.MapPost("/auth/logout", async (SignInManager<ApplicationUser> signIn) =>
         {

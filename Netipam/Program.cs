@@ -197,6 +197,25 @@ builder.Services.AddHttpClient<ProxmoxApiClient>()
         };
     });
 
+// Per-IP throttle for sign-in attempts (guards /api/auth/login).
+builder.Services.AddRateLimiter(o =>
+{
+    o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    o.OnRejected = async (ctx, ct) =>
+    {
+        ctx.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        await ctx.HttpContext.Response.WriteAsJsonAsync(new { ok = false, error = "Too many sign-in attempts from this address. Wait a minute and try again." }, ct);
+    };
+    o.AddPolicy("login", ctx => System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+        ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 20,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        }));
+});
+
 var app = builder.Build();
 
 // Migrate + seed Identity (roles + admin user)
@@ -296,6 +315,7 @@ app.Use(async (context, next) =>
 });
 
 // Auth middleware (REQUIRED)
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
