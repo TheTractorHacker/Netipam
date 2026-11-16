@@ -279,6 +279,21 @@ app.UseWhen(
 app.UseHttpsRedirection();
 
 app.UseStaticFiles();
+
+// The React app is the primary UI: send the entry points there. The classic Blazor
+// pages remain reachable at their other paths until they are removed.
+app.Use(async (context, next) =>
+{
+    if (HttpMethods.IsGet(context.Request.Method) &&
+        (context.Request.Path == "/" ||
+         context.Request.Path.Equals("/login", StringComparison.OrdinalIgnoreCase) ||
+         context.Request.Path.Equals("/setup", StringComparison.OrdinalIgnoreCase)))
+    {
+        context.Response.Redirect("/app/");
+        return;
+    }
+    await next();
+});
 app.UseRouting();
 
 // If no users exist yet, force setup flow
